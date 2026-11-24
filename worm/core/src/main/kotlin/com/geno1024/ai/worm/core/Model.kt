@@ -1,0 +1,108 @@
+package com.geno1024.ai.worm.core
+
+/** What kind of bytes a [MediaAsset] points at. */
+enum class MediaKind(val folder: String) {
+    IMAGE("images"),
+    VIDEO("videos"),
+}
+
+/**
+ * A media item discovered by a crawler. Crawlers only *describe* media;
+ * downloading and placing it is the job of [MediaSink] / [MediaDownloader].
+ *
+ * [isCover] marks a first-frame / poster image that came from a video post.
+ * It is saved as an image, never mislabelled as a playable video.
+ */
+data class MediaAsset(
+    val url: String,
+    val kind: MediaKind,
+    val id: String? = null,
+    val title: String? = null,
+    val createdAt: Long? = null,
+    val referer: String? = null,
+    val extension: String? = null,
+    val isCover: Boolean = false,
+    val relativeDir: String = kind.folder,
+    val suggestedName: String? = null,
+)
+
+/** One collected record. Text is present now for API stability; media is collected first. */
+sealed interface CollectedItem {
+    val sourceUrl: String
+    val title: String?
+    val createdAt: Long?
+
+    data class Media(val asset: MediaAsset) : CollectedItem {
+        override val sourceUrl: String get() = asset.url
+        override val title: String? get() = asset.title
+        override val createdAt: Long? get() = asset.createdAt
+    }
+
+    data class Text(
+        override val sourceUrl: String,
+        override val title: String?,
+        val body: String,
+        override val createdAt: Long? = null,
+    ) : CollectedItem
+}
+
+/** A login state handed to crawlers; cookies are keyed by name only (domain is irrelevant to QQ/Zhihu APIs). */
+data class CrawlSession(
+    val cookies: Map<String, String>,
+    val loginId: String? = null,
+) {
+    val cookieHeader: String get() = Cookies.toHeader(cookies)
+}
+
+/** Input to a crawl. [subject] is a QQ number, a Zhihu user token, etc., depending on the crawler. */
+data class CrawlRequest(
+    val subject: String,
+    val maxItems: Int = Int.MAX_VALUE,
+    val includeText: Boolean = false,
+)
+
+data class SavedMedia(
+    val asset: MediaAsset,
+    val name: String,
+    val size: Long,
+    val existed: Boolean = false,
+)
+
+data class CrawlReport(
+    val crawlerId: String,
+    val subject: String,
+    val items: List<CollectedItem>,
+    val saved: List<SavedMedia>,
+    val warnings: List<String> = emptyList(),
+)
+
+data class CrawlProgress(
+    val stage: String,
+    val current: Int,
+    val total: Int? = null,
+    val detail: String = "",
+)
+
+interface CrawlListener {
+    fun onProgress(progress: CrawlProgress) {}
+    fun onWarning(message: String) {}
+
+    companion object {
+        val NOOP: CrawlListener = object : CrawlListener {}
+    }
+}
+
+/** Implemented by every crawler module; the Android app only knows this interface. */
+interface Crawler {
+    val id: String
+    val displayName: String
+
+    suspend fun collect(
+        request: CrawlRequest,
+        session: CrawlSession,
+        sink: MediaSink,
+        listener: CrawlListener = CrawlListener.NOOP,
+    ): CrawlReport
+}
+
+class CrawlException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
