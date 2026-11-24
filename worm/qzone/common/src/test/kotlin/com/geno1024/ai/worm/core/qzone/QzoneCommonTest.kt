@@ -2,6 +2,8 @@ package com.geno1024.ai.worm.core.qzone
 
 import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.MediaKind
+import org.junit.jupiter.api.io.TempDir
+import java.io.File
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -55,6 +57,48 @@ class QzoneCommonTest {
         assertEquals(MediaKind.IMAGE, byUrl["https://p.qzone.com/repost.png"]?.kind)
         assertEquals(1700000000L, byUrl["https://p.qzone.com/big.jpg"]?.createdAt)
         assertEquals(5, assets.size)
+    }
+
+    @Test
+    fun `credentials roundtrip`(@TempDir temp: File) {
+        val file = File(temp, "nested/credentials.json")
+        val session = CrawlSession(mapOf("p_skey" to "secret", "uin" to "o123"))
+        saveQzoneCredentials(file, session, "123")
+        assertEquals("secret", loadQzoneCredentials(file)!!.cookies["p_skey"])
+        assertEquals("123", loadQzoneCredentials(file)!!.loginUin)
+    }
+
+    @Test
+    fun `album list parser handles all three shapes`() {
+        val body = """
+            shine0_Callback({"code":0,"subcode":0,"data":{
+              "albumListModeSort":[{"id":"1","name":"Trip","total":2}],
+              "albumListModeClass":[{"albumList":[{"id":"2","name":"Family","total":1}]}],
+              "albumList":[{"id":"3","name":"Hidden","allowAccess":0,"total":1}]
+            }});
+        """.trimIndent()
+        val albums = parseAlbumListResponse(body).albums
+        assertEquals(listOf("Trip", "Family"), albums.map { it.name })
+        val fallback = parseAlbumListResponse("""{"code":0,"data":{"albumList":[{"id":"3","name":"Hidden","allowAccess":0}]}}""")
+        assertEquals(listOf("Hidden"), fallback.albums.map { it.name })
+        assertFalse(fallback.albums.single().allowAccess)
+        assertTrue(parseAlbumListResponse("""{"code":-3000}""").albums.isEmpty())
+        assertTrue(buildAlbumListUrl("123", 42).contains("hostUin=123"))
+        assertTrue(buildPhotoListUrl("123", 42, "V_abc", 0, 100).contains("topicId=V_abc"))
+    }
+
+    @Test
+    fun `photo list parser reads outstyle json`() {
+        val body = """
+            {"code":0,"data":{"totalInAlbum":2,"photoList":[
+              {"lloc":"p1","raw":"https://p.qzone.com/1.jpg"},
+              {"lloc":"p2","raw":"https://v.qzone.com/2.mp4"}
+            ]}};
+        """.trimIndent()
+        val page = parsePhotoListResponse(body)
+        assertEquals(2, page.totalInAlbum)
+        assertEquals(2, page.photos.length())
+        assertEquals(0, parsePhotoListResponse("""{"code":-3000}""").photos.length())
     }
 
     @Test
