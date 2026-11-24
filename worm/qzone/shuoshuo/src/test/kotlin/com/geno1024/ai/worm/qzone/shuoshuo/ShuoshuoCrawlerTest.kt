@@ -7,6 +7,7 @@ import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.DirectoryMediaSink
 import com.geno1024.ai.worm.core.HttpPortal
 import com.geno1024.ai.worm.core.HttpResponse
+import com.geno1024.ai.worm.core.MediaAsset
 import com.geno1024.ai.worm.core.MediaKind
 import com.geno1024.ai.worm.core.qzone.computeGtk
 import kotlinx.coroutines.runBlocking
@@ -96,9 +97,17 @@ class ShuoshuoCrawlerTest {
         val second = """_preloadCallback({"code":0,"subcode":0,"total":100,"hasMore":false,"msglist":[{"tid":"t21","video":[{"raw_url":"https://v.qzone.com/21.mp4"}]}]});"""
         val http = PagedHttp(first, second)
         val events = mutableListOf<CrawlProgress>()
+        val discovered = mutableListOf<MediaAsset>()
+        val done = mutableListOf<MediaAsset>()
         val listener = object : CrawlListener {
             override fun onProgress(progress: CrawlProgress) {
                 events += progress
+            }
+            override fun onDiscovered(assets: List<MediaAsset>) {
+                discovered += assets
+            }
+            override fun onAssetDone(asset: MediaAsset) {
+                done += asset
             }
         }
         val crawler = ShuoshuoCrawler(http, File(temp, "cache"), downloadDelayMs = 0)
@@ -115,6 +124,9 @@ class ShuoshuoCrawlerTest {
         assertEquals((1..21).toList(), mediaSteps.map { it.current })
         assertTrue(mediaSteps.all { it.total == 21 })
         assertTrue(events.indexOf(listSteps.last()) < events.indexOf(mediaSteps.first()))
+        assertEquals(21, discovered.size)
+        assertEquals(21, done.size)
+        assertTrue(discovered.all { it.relativeDir.startsWith("qzone/12345/") })
     }
 
     @Test

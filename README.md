@@ -45,6 +45,12 @@ java -jar worm/qzone/shuoshuo/build/libs/*-all.jar --uin 123456 --out build/qzon
 - 相册：`--uin`、`--album` 过滤相册名/ID，`--pages`（每相册）、`--delay`、`--out`。
 - 知乎：`zhihu <主页URL或url_token>`，可加 `--answers` / `--articles` / `--activities` 限定内容类型。
 
+抓取分两阶段：先翻完列表并记下全部媒体，再批量下载；下载阶段进度为确定的 `i/n`。
+发现列表后会在输出目录写 `resume-queue.json`，每完成一个媒体就从队列移除。进程被中断后，
+下次用同一个 `--out` 运行会先自动续传未完成的部分，再按本次参数执行新抓取。
+队列只存媒体描述和目标目录，不存 Cookie；登录态仍由本次的 `--cookie` / `--cookies-file` /
+默认凭据提供。
+
 登录 Cookie 三种来源（按顺序选一个）：
 
 1. `--cookie "p_skey=...; skey=...; uin=..."` 直接传 Cookie 头。
@@ -71,9 +77,13 @@ Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复�
    Cookie 由 `CookieManager` 采集，退出登录页即刷新界面上的登录态。
 2. 填目标（QQ 号或知乎 `url_token` / 主页 URL）。范围由分页上限决定，不再有「最多收集条数」旋钮。
 3. 可选「选择保存目录」用 SAF 授权一个目录；未选择时写到应用私有目录 `filesDir/worm-media`。
-   SAF 目录授权会被持久化，爬虫写入时按 `images/` / `videos/` 分子目录。
+   SAF 目录授权会被持久化，爬虫按上面的 `qzone/<QQ号>/…`、`zhihu/<token>/…` 结构写入。
 4. 点「开始抓取」，先把列表翻完再批量下载：列表阶段显示页码，下载阶段显示「媒体 i/n」确定进度条，
    最后给出警告与保存统计。抓取跑在 `Dispatchers.IO`，不阻塞主线程。
+
+发现列表后队列写到 `filesDir/worm/resume-queue.json`，每完成一个媒体就更新一次。app 重启时若发现未完成
+队列，会先按队列记录的抓取源和保存目录续传（进度从已完成数继续），再允许开始新抓取；若登录态缺失或
+SAF 授权被撤销，队列会原样保留并在界面提示原因，重新登录/授权后重启即可继续。队列不保存 Cookie。
 
 Android 与 CLI 的登录态是两套：app 的 Cookie 留在 app-private 的 WebView CookieJar 里，不会自动写入
 CLI 的 `credentials.json`。首次安装需要分别登录。

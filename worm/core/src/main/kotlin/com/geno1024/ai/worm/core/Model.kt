@@ -91,6 +91,12 @@ interface CrawlListener {
     fun onProgress(progress: CrawlProgress) {}
     fun onWarning(message: String) {}
 
+    /** The complete discovered list, before any bytes are downloaded. Checkpoint here. */
+    fun onDiscovered(assets: List<MediaAsset>) {}
+
+    /** One asset is settled (saved or failed); safe to drop from a durable queue. */
+    fun onAssetDone(asset: MediaAsset) {}
+
     companion object {
         val NOOP: CrawlListener = object : CrawlListener {}
     }

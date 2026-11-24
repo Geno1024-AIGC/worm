@@ -2,6 +2,7 @@ package com.geno1024.ai.worm.core
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -100,6 +101,96 @@ class CoreTest {
         assertEquals(listOf(1 to 3, 2 to 3, 3 to 3), steps)
         assertEquals(2, saved.size)
         assertEquals(listOf("https://example.com/2.jpg"), failures)
+    }
+
+    @Test
+    fun `resume queue roundtrips assets and drops settled ones`(@TempDir temp: File) {
+        val queue = ResumeQueue(File(temp, "state/resume-queue.json"))
+        val assets = listOf(
+            MediaAsset(
+                "https://example.com/1.jpg", MediaKind.IMAGE, id = "a",
+                relativeDir = "qzone/123/image", referer = "https://user.qzone.qq.com/",
+            ),
+            MediaAsset(
+                "https://example.com/2.mp4", MediaKind.VIDEO, id = "b",
+                createdAt = 42L, relativeDir = "qzone/123/video",
+            ),
+        )
+        queue.save(
+            ResumeQueue.Batch(
+                "qzone.shuoshuo", "123",
+                ResumeQueue.SinkRef(ResumeQueue.SinkRef.DIRECTORY, "media"),
+                total = 5, assets = assets,
+            ),
+        )
+        val loaded = queue.load()!!
+        assertEquals("qzone.shuoshuo", loaded.crawlerId)
+        assertEquals("123", loaded.subject)
+        assertEquals(5, loaded.total)
+        assertEquals(assets, loaded.assets)
+
+        queue.remove(assets.first())
+        assertEquals(listOf(assets.last()), queue.load()!!.assets)
+        queue.clear()
+        assertNull(queue.load())
+    }
+
+    @Test
+    fun `corrupt resume queue is dropped instead of replayed`(@TempDir temp: File) {
+        val file = File(temp, "resume-queue.json").apply { writeText("{broken") }
+        assertNull(ResumeQueue(file).load())
+        assertFalse(file.exists())
+    }
+
+    @Test
+    fun `resume runner continues progress and drains the queue`(@TempDir temp: File) {
+        val pending = listOf(
+            MediaAsset("https://example.com/4.jpg", MediaKind.IMAGE, id = "m4", relativeDir = "qzone/123/image"),
+            MediaAsset("https://example.com/5.jpg", MediaKind.IMAGE, id = "m5", relativeDir = "qzone/123/image"),
+        )
+        val queue = ResumeQueue(File(temp, "resume-queue.json"))
+        queue.save(
+            ResumeQueue.Batch(
+                "qzone.shuoshuo", "123",
+                ResumeQueue.SinkRef(ResumeQueue.SinkRef.DIRECTORY, "media"),
+                total = 5, assets = pending,
+            ),
+        )
+        val http = object : HttpPortal {
+            override fun get(url: String, session: CrawlSession, referer: String?, extraHeaders: Map<String, String>) =
+                HttpResponse(200, "", url)
+
+            override fun download(
+                url: String,
+                session: CrawlSession,
+                referer: String?,
+                target: File,
+                onBytes: (Long, Long?) -> Unit,
+            ): File {
+                if ("5.jpg" in url) throw java.io.IOException("boom")
+                target.writeBytes("x".toByteArray())
+                return target
+            }
+        }
+        val steps = mutableListOf<Triple<String, Int, Int>>()
+        val warnings = mutableListOf<String>()
+        val listener = object : CrawlListener {
+            override fun onProgress(progress: CrawlProgress) {
+                steps += Triple(progress.stage, progress.current, progress.total ?: -1)
+            }
+            override fun onWarning(message: String) {
+                warnings += message
+            }
+        }
+        val saved = ResumeRunner(
+            queue, http, CrawlSession(emptyMap()),
+            DirectoryMediaSink(File(temp, "media")), File(temp, "cache"), listener, delayMs = 0,
+        ).drain()
+
+        assertEquals(1, saved.size)
+        assertEquals(listOf(Triple("续传", 4, 5), Triple("续传", 5, 5)), steps)
+        assertEquals(1, warnings.size)
+        assertNull(queue.load())
     }
 
     @Test

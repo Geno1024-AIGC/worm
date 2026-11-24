@@ -4,21 +4,27 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.geno1024.ai.worm.android.site.Site
 import com.geno1024.ai.worm.android.site.SiteCookies
 import com.geno1024.ai.worm.android.site.Source
+import com.geno1024.ai.worm.android.storage.SafMediaSink
 import com.geno1024.ai.worm.android.storage.createMediaSink
 import com.geno1024.ai.worm.core.CrawlListener
 import com.geno1024.ai.worm.core.CrawlProgress
 import com.geno1024.ai.worm.core.CrawlRequest
 import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.Crawler
+import com.geno1024.ai.worm.core.DirectoryMediaSink
 import com.geno1024.ai.worm.core.HttpPortal
 import com.geno1024.ai.worm.core.JdkHttpPortal
+import com.geno1024.ai.worm.core.MediaAsset
 import com.geno1024.ai.worm.core.MediaSink
+import com.geno1024.ai.worm.core.ResumeQueue
+import com.geno1024.ai.worm.core.ResumeRunner
 import com.geno1024.ai.worm.core.qzone.requireQzoneAuth
 import com.geno1024.ai.worm.qzone.album.AlbumCrawler
 import com.geno1024.ai.worm.qzone.shuoshuo.ShuoshuoCrawler
@@ -42,6 +48,7 @@ data class UiState(
     val progress: CrawlProgress? = null,
     val warnings: List<String> = emptyList(),
     val result: String? = null,
+    val resume: String? = null,
     val error: String? = null,
 ) {
     val cookies: Map<String, String>
@@ -58,9 +65,67 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
     private var sink: MediaSink = createMediaSink(app, prefs.getString(KEY_STORAGE, null))
+    private val queue = ResumeQueue(File(app.filesDir, "worm/resume-queue.json"))
 
     init {
         refreshCookies()
+        resumePending()
+    }
+
+    /**
+     * Replays an unfinished batch before accepting a new crawl. A missing login or an
+     * unreadable SAF tree keeps the queue intact, so the next launch can try again;
+     * nothing is discarded just because the app started before the user logged in.
+     */
+    private fun resumePending() {
+        val pending = queue.load() ?: return
+        if (pending.assets.isEmpty()) {
+            queue.clear()
+            return
+        }
+        _state.update { it.copy(running = true, progress = null, resume = null, error = null) }
+        viewModelScope.launch(Dispatchers.IO) {
+            val warnings = Collections.synchronizedList(mutableListOf<String>())
+            try {
+                val source = sourceFor(pending.crawlerId)
+                    ?: throw IllegalStateException("未知续传任务：${pending.crawlerId}")
+                val session = sessionFor(_state.value.copy(source = source))
+                val listener = object : CrawlListener {
+                    override fun onProgress(progress: CrawlProgress) {
+                        _state.update { it.copy(progress = progress) }
+                    }
+                    override fun onWarning(message: String) {
+                        warnings.add(message)
+                    }
+                }
+                val saved = ResumeRunner(
+                    queue = queue,
+                    http = httpPortal(),
+                    session = session,
+                    sink = sinkFor(pending.sink),
+                    cacheDir = File(app.cacheDir, "downloads"),
+                    listener = listener,
+                    delayMs = 800L,
+                ).drain()
+                _state.update {
+                    it.copy(
+                        running = false,
+                        progress = null,
+                        resume = "续传完成：新下载 ${saved.count { item -> !item.existed }} 项",
+                        warnings = warnings.toList(),
+                    )
+                }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(
+                        running = false,
+                        progress = null,
+                        resume = "待续传 ${pending.assets.size} 项：${e.message ?: e.javaClass.simpleName}",
+                        warnings = warnings.toList(),
+                    )
+                }
+            }
+        }
     }
 
     fun refreshCookies() {
@@ -107,34 +172,23 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         if (_state.value.running) return
         viewModelScope.launch(Dispatchers.IO) {
             _state.update {
-                it.copy(running = true, progress = null, warnings = emptyList(), result = null, error = null)
+                it.copy(running = true, progress = null, warnings = emptyList(), result = null, resume = null, error = null)
             }
             try {
                 val current = _state.value
                 val session = sessionFor(current)
-                val http: HttpPortal = JdkHttpPortal(
-                    userAgent = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 " +
-                        "(KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36 worm-android",
-                    delayMs = 800L,
-                )
+                val http = httpPortal()
                 val crawler = crawlerFor(current.source, http, File(app.cacheDir, "downloads"))
                 val displayName = crawler.displayName
                 val liveWarnings = Collections.synchronizedList(mutableListOf<String>())
-                val listener = object : CrawlListener {
-                    override fun onProgress(progress: CrawlProgress) {
-                        _state.update { it.copy(progress = progress) }
-                    }
-
-                    override fun onWarning(message: String) {
-                        liveWarnings.add(message)
-                    }
-                }
+                val listener = appListener(crawler.id, current.subject.trim(), liveWarnings)
                 val report = crawler.collect(
                     CrawlRequest(current.subject.trim()),
                     session,
                     sink,
                     listener,
                 )
+                queue.clear()
                 val fresh = report.saved.count { !it.existed }
                 val existing = report.saved.count { it.existed }
                 val warnings = (liveWarnings + report.warnings).distinct()
@@ -154,6 +208,71 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    /** Checkpoints the discovered batch and drops each settled asset from the queue. */
+    private fun appListener(
+        crawlerId: String,
+        subject: String,
+        warnings: MutableList<String>,
+    ): CrawlListener = object : CrawlListener {
+        override fun onProgress(progress: CrawlProgress) {
+            _state.update { it.copy(progress = progress) }
+        }
+
+        override fun onWarning(message: String) {
+            warnings.add(message)
+        }
+
+        override fun onDiscovered(assets: List<MediaAsset>) {
+            if (assets.isNotEmpty()) {
+                queue.save(ResumeQueue.Batch(crawlerId, subject, sinkRef(), assets.size, assets))
+            }
+        }
+
+        override fun onAssetDone(asset: MediaAsset) {
+            queue.remove(asset)
+        }
+    }
+
+    private fun sinkRef(): ResumeQueue.SinkRef {
+        val tree = prefs.getString(KEY_STORAGE, null)
+        return if (!tree.isNullOrBlank()) {
+            ResumeQueue.SinkRef(ResumeQueue.SinkRef.SAF, tree)
+        } else {
+            ResumeQueue.SinkRef(
+                ResumeQueue.SinkRef.DIRECTORY,
+                File(app.filesDir, "worm-media").absolutePath,
+            )
+        }
+    }
+
+    /** Rebuilds the exact sink the interrupted run used; a revoked SAF grant is not silently redirected. */
+    private fun sinkFor(ref: ResumeQueue.SinkRef): MediaSink = when (ref.kind) {
+        ResumeQueue.SinkRef.DIRECTORY -> DirectoryMediaSink(File(ref.root))
+        ResumeQueue.SinkRef.SAF -> {
+            val uri = runCatching { ref.root.toUri() }.getOrNull()
+                ?: throw IllegalStateException("续传目录无效，请重新选择保存目录")
+            val tree = DocumentFile.fromTreeUri(app, uri)
+            if (tree == null || !tree.canWrite()) {
+                throw IllegalStateException("续传目录权限已失效，请重新选择保存目录")
+            }
+            SafMediaSink(app, uri)
+        }
+        else -> throw IllegalStateException("未知的续传目标：${ref.kind}")
+    }
+
+    private fun sourceFor(crawlerId: String): Source? = when (crawlerId) {
+        "qzone.shuoshuo" -> Source.QZONE_SHUOSHUO
+        "qzone.album" -> Source.QZONE_ALBUM
+        "zhihu.user" -> Source.ZHIHU
+        else -> null
+    }
+
+    private fun httpPortal(): HttpPortal = JdkHttpPortal(
+        userAgent = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36 worm-android",
+        delayMs = 800L,
+    )
 
     private fun sessionFor(state: UiState): CrawlSession {
         val cookies = state.cookies

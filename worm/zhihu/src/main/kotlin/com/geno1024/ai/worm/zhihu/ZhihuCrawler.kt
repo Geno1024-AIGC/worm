@@ -97,14 +97,17 @@ class ZhihuCrawler(
         }
 
         // Phase 2: the list is complete, so the download progress has a real total.
+        val assets = items.filterIsInstance<CollectedItem.Media>().map { it.asset }
+        listener.onDiscovered(assets)
         val saved = downloader.downloadAll(
-            assets = items.filterIsInstance<CollectedItem.Media>().map { it.asset },
+            assets = assets,
             session = session,
             sink = sink,
             onProgress = { current, total, asset ->
                 listener.onProgress(CrawlProgress("媒体", current, total, asset.url))
             },
             onFailure = { asset, error -> warnings += "下载失败 ${asset.url}: ${error.message}" },
+            onDone = { asset -> listener.onAssetDone(asset) },
         )
         return CrawlReport(id, token, items, saved, warnings)
     }

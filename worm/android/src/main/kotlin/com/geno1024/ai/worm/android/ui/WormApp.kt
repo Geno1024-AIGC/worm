@@ -170,6 +170,7 @@ fun WormApp() {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
                 }
+                ui.resume?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 ui.result?.let { Text(it) }
                 ui.error?.let { Text("错误：$it", color = MaterialTheme.colorScheme.error) }
                 if (ui.warnings.isNotEmpty()) {

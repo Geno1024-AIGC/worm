@@ -100,6 +100,7 @@ class MediaDownloader(
         sink: MediaSink,
         onProgress: (current: Int, total: Int, asset: MediaAsset) -> Unit,
         onFailure: (asset: MediaAsset, error: Exception) -> Unit,
+        onDone: (asset: MediaAsset) -> Unit = {},
     ): List<SavedMedia> {
         val saved = mutableListOf<SavedMedia>()
         assets.forEachIndexed { index, asset ->
@@ -109,6 +110,7 @@ class MediaDownloader(
                 onFailure(asset, e)
             }
             onProgress(index + 1, assets.size, asset)
+            onDone(asset)
         }
         return saved
     }

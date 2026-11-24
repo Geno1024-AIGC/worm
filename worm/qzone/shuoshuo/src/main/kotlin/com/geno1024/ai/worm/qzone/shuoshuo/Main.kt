@@ -11,6 +11,9 @@ import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.DirectoryMediaSink
 import com.geno1024.ai.worm.core.JdkHttpPortal
 import com.geno1024.ai.worm.core.JsonOutput
+import com.geno1024.ai.worm.core.MediaAsset
+import com.geno1024.ai.worm.core.ResumeQueue
+import com.geno1024.ai.worm.core.ResumeRunner
 import com.geno1024.ai.worm.core.qzone.defaultQzoneCredentialFile
 import com.geno1024.ai.worm.core.qzone.loadQzoneCredentials
 import com.geno1024.ai.worm.core.qzone.requireQzoneAuth
@@ -50,20 +53,46 @@ fun main(args: Array<String>) {
     val session = CrawlSession(cookies, auth.loginUin)
     val subject = cli.string("uin") ?: cli.positionals.firstOrNull() ?: auth.loginUin ?: ""
     val out = File(cli.string("out", "build/qzone-shuoshuo"))
-    val sink = DirectoryMediaSink(File(out, "media"))
+    val mediaDir = File(out, "media")
+    val sink = DirectoryMediaSink(mediaDir)
+    val queue = ResumeQueue(File(out, "resume-queue.json"))
+    val sinkRef = ResumeQueue.SinkRef(ResumeQueue.SinkRef.DIRECTORY, mediaDir.absolutePath)
     val http = JdkHttpPortal(delayMs = cli.long("delay", 800))
     val crawler = ShuoshuoCrawler(
         http = http,
         cacheDir = File(out, "cache"),
         maxPages = if (cli.flag("all")) 1000 else cli.int("pages", 10),
     )
-    val listener = object : CrawlListener {
-        override fun onProgress(progress: CrawlProgress) {
-            if (progress.stage == "说说列表") {
-                println("[${progress.stage}] page ${progress.current} ${progress.detail}")
+    val resumed = runBlocking {
+        val pending = queue.load() ?: return@runBlocking null
+        if (pending.assets.isEmpty()) {
+            queue.clear()
+            return@runBlocking null
+        }
+        if (pending.sink.kind != ResumeQueue.SinkRef.DIRECTORY) {
+            println("[warn] 续传目标类型不支持：${pending.sink.kind}")
+            return@runBlocking null
+        }
+        // Rebuild the session from the current CLI credentials; cookies are never stored.
+        ResumeRunner(
+            queue = queue,
+            http = http,
+            session = session,
+            sink = DirectoryMediaSink(File(pending.sink.root)),
+            cacheDir = File(out, "cache"),
+            listener = consoleListener(),
+            delayMs = cli.long("delay", 800),
+        ).drain().size
+    }
+    resumed?.let { println("resumed=$it") }
+
+    val listener = object : CrawlListener by consoleListener() {
+        override fun onDiscovered(assets: List<MediaAsset>) {
+            if (assets.isNotEmpty()) {
+                queue.save(ResumeQueue.Batch(crawler.id, subject, sinkRef, assets.size, assets))
             }
         }
-        override fun onWarning(message: String) = println("[warn] $message")
+        override fun onAssetDone(asset: MediaAsset) = queue.remove(asset)
     }
 
     val report = runBlocking {
@@ -77,6 +106,15 @@ fun main(args: Array<String>) {
     JsonOutput.write(File(out, "report.json"), reportMap(report))
     println("target=${report.subject} items=${report.items.size} saved=${report.saved.size} warnings=${report.warnings.size}")
     println("report: ${File(out, "report.json")}")
+}
+
+private fun consoleListener(): CrawlListener = object : CrawlListener {
+    override fun onProgress(progress: CrawlProgress) {
+        if (progress.stage == "说说列表" || progress.stage == "续传") {
+            println("[${progress.stage}] ${progress.current}${progress.total?.let { "/$it" } ?: ""} ${progress.detail}")
+        }
+    }
+    override fun onWarning(message: String) = println("[warn] $message")
 }
 
 private fun reportMap(report: CrawlReport): Map<String, Any?> = mapOf(
