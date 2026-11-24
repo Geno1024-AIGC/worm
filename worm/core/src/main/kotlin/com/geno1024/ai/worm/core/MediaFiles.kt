@@ -89,4 +89,27 @@ class MediaDownloader(
             if (temp.exists()) temp.delete()
         }
     }
+
+    /**
+     * Downloads an already discovered list. The total is known up front, so [onProgress]
+     * can drive a determinate bar; one failed asset never aborts the rest of the batch.
+     */
+    fun downloadAll(
+        assets: List<MediaAsset>,
+        session: CrawlSession,
+        sink: MediaSink,
+        onProgress: (current: Int, total: Int, asset: MediaAsset) -> Unit,
+        onFailure: (asset: MediaAsset, error: Exception) -> Unit,
+    ): List<SavedMedia> {
+        val saved = mutableListOf<SavedMedia>()
+        assets.forEachIndexed { index, asset ->
+            try {
+                download(asset, session, sink)?.let(saved::add)
+            } catch (e: Exception) {
+                onFailure(asset, e)
+            }
+            onProgress(index + 1, assets.size, asset)
+        }
+        return saved
+    }
 }

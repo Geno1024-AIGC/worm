@@ -58,8 +58,10 @@ fun main(args: Array<String>) {
         maxPages = if (cli.flag("all")) 1000 else cli.int("pages", 10),
     )
     val listener = object : CrawlListener {
-        override fun onProgress(p: CrawlProgress) {
-            if (p.stage == "说说列表") println("[${p.stage}] page ${p.current} ${p.detail}")
+        override fun onProgress(progress: CrawlProgress) {
+            if (progress.stage == "说说列表") {
+                println("[${progress.stage}] page ${progress.current} ${progress.detail}")
+            }
         }
         override fun onWarning(message: String) = println("[warn] $message")
     }

@@ -12,7 +12,6 @@ import com.geno1024.ai.worm.core.HttpPortal
 import com.geno1024.ai.worm.core.JdkHttpPortal
 import com.geno1024.ai.worm.core.MediaDownloader
 import com.geno1024.ai.worm.core.MediaSink
-import com.geno1024.ai.worm.core.SavedMedia
 import java.io.File
 
 private const val REFERER = "https://www.zhihu.com/"
@@ -42,15 +41,16 @@ class ZhihuCrawler(
         require(token.isNotBlank()) { "Zhihu user token or profile URL is required" }
 
         val items = mutableListOf<CollectedItem>()
-        val saved = mutableListOf<SavedMedia>()
         val warnings = mutableListOf<String>()
+        val seen = HashSet<String>()
         if (session.cookies.isEmpty()) warnings += "未提供知乎 Cookie：接口可能返回 401/403（需要登录）"
 
+        // Phase 1: paginate through each content kind, recording media without downloading.
         for (kind in kinds) {
             var offset = 0
             var page = 0
-            while (page < maxPagesPerKind && items.size < request.maxItems) {
-                listener.onProgress(CrawlProgress(kind.name, page + 1, null, "offset=$offset"))
+            while (page < maxPagesPerKind) {
+                listener.onProgress(CrawlProgress(kind.name, page + 1, null, "offset=$offset，已发现 ${items.size} 项"))
                 val response = http.get(
                     buildZhihuListUrl(token, kind, offset, pageSize),
                     session,
@@ -73,16 +73,8 @@ class ZhihuCrawler(
                 if (parsed.contents.isEmpty()) break
 
                 for (content in parsed.contents) {
-                    if (items.size >= request.maxItems) break
                     for (asset in content.media) {
-                        if (items.size >= request.maxItems) break
-                        items += CollectedItem.Media(asset)
-                        try {
-                            downloader.download(asset, session, sink)?.let(saved::add)
-                            listener.onProgress(CrawlProgress("媒体", saved.size, items.size, asset.url))
-                        } catch (e: Exception) {
-                            warnings += "下载失败 ${asset.url}: ${e.message}"
-                        }
+                        if (seen.add("${asset.kind.name}:${asset.url}")) items += CollectedItem.Media(asset)
                     }
                     if (request.includeText && content.html.isNotBlank()) {
                         items += CollectedItem.Text(
@@ -100,6 +92,17 @@ class ZhihuCrawler(
                 page++
             }
         }
+
+        // Phase 2: the list is complete, so the download progress has a real total.
+        val saved = downloader.downloadAll(
+            assets = items.filterIsInstance<CollectedItem.Media>().map { it.asset },
+            session = session,
+            sink = sink,
+            onProgress = { current, total, asset ->
+                listener.onProgress(CrawlProgress("媒体", current, total, asset.url))
+            },
+            onFailure = { asset, error -> warnings += "下载失败 ${asset.url}: ${error.message}" },
+        )
         return CrawlReport(id, token, items, saved, warnings)
     }
 }

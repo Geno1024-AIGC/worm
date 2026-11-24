@@ -12,7 +12,6 @@ import com.geno1024.ai.worm.core.HttpPortal
 import com.geno1024.ai.worm.core.JdkHttpPortal
 import com.geno1024.ai.worm.core.MediaDownloader
 import com.geno1024.ai.worm.core.MediaSink
-import com.geno1024.ai.worm.core.SavedMedia
 import com.geno1024.ai.worm.core.objects
 import com.geno1024.ai.worm.core.qzone.buildAlbumListUrl
 import com.geno1024.ai.worm.core.qzone.buildPhotoListUrl
@@ -53,19 +52,19 @@ class AlbumCrawler(
         require(targetUin.isNotBlank() && targetUin != "0") { "invalid QQ number: $target" }
 
         val items = mutableListOf<CollectedItem>()
-        val saved = mutableListOf<SavedMedia>()
         val warnings = mutableListOf<String>()
+        val seen = HashSet<String>()
 
         val albumPage = parseAlbumListResponse(
             http.get(buildAlbumListUrl(targetUin, auth.gtk), auth.session, REFERER).body,
         )
         if (isAuthError(albumPage.code, albumPage.subcode)) {
             warnings += "登录态失效（code=${albumPage.code}），请重新登录"
-            return CrawlReport(id, targetUin, items, saved, warnings)
+            return CrawlReport(id, targetUin, items, emptyList(), warnings)
         }
         if (albumPage.code != 0) {
             warnings += "相册列表返回错误：code=${albumPage.code}, message=${albumPage.message}"
-            return CrawlReport(id, targetUin, items, saved, warnings)
+            return CrawlReport(id, targetUin, items, emptyList(), warnings)
         }
         val albums = albumPage.albums.filter { album ->
             album.allowAccess && (albumFilter.isNullOrBlank() ||
@@ -73,14 +72,14 @@ class AlbumCrawler(
         }
         if (albums.isEmpty()) warnings += "没有可访问的相册"
 
+        // Phase 1: list every accessible album page, collecting assets only.
         for ((albumIndex, album) in albums.withIndex()) {
-            if (items.size >= request.maxItems) break
             var start = 0
             var page = 0
-            while (page < maxPagesPerAlbum && items.size < request.maxItems) {
+            while (page < maxPagesPerAlbum) {
                 listener.onProgress(CrawlProgress(
                     "相册", albumIndex + 1, albums.size,
-                    "${album.name} · 第${page + 1}页，已收 ${items.size} 项",
+                    "${album.name} · 第${page + 1}页，已发现 ${items.size} 项",
                 ))
                 val photoPage = parsePhotoListResponse(
                     http.get(
@@ -101,16 +100,8 @@ class AlbumCrawler(
                 if (photos.isEmpty()) break
 
                 for (photo in photos) {
-                    if (items.size >= request.maxItems) break
                     for (asset in extractAlbumPhotoMedia(photo, album.name)) {
-                        if (items.size >= request.maxItems) break
-                        items += CollectedItem.Media(asset)
-                        try {
-                            downloader.download(asset, auth.session, sink)?.let(saved::add)
-                            listener.onProgress(CrawlProgress("媒体", saved.size, items.size, asset.url))
-                        } catch (e: Exception) {
-                            warnings += "下载失败 ${asset.url}: ${e.message}"
-                        }
+                        if (seen.add("${asset.kind.name}:${asset.url}")) items += CollectedItem.Media(asset)
                     }
                 }
 
@@ -121,6 +112,17 @@ class AlbumCrawler(
                 page++
             }
         }
+
+        // Phase 2: download the discovered list with a determinate total.
+        val saved = downloader.downloadAll(
+            assets = items.filterIsInstance<CollectedItem.Media>().map { it.asset },
+            session = auth.session,
+            sink = sink,
+            onProgress = { current, total, asset ->
+                listener.onProgress(CrawlProgress("媒体", current, total, asset.url))
+            },
+            onFailure = { asset, error -> warnings += "下载失败 ${asset.url}: ${error.message}" },
+        )
         return CrawlReport(id, targetUin, items, saved, warnings)
     }
 }

@@ -58,10 +58,11 @@ Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复�
 
 1. 选择抓取源（说说 / 相册 / 知乎用户），点「登录 QQ / 知乎」在 WebView 里登录；
    Cookie 由 `CookieManager` 采集，退出登录页即刷新界面上的登录态。
-2. 填目标（QQ 号或知乎 `url_token` / 主页 URL）与最大条数。
+2. 填目标（QQ 号或知乎 `url_token` / 主页 URL）。范围由分页上限决定，不再有「最多收集条数」旋钮。
 3. 可选「选择保存目录」用 SAF 授权一个目录；未选择时写到应用私有目录 `filesDir/worm-media`。
    SAF 目录授权会被持久化，爬虫写入时按 `images/` / `videos/` 分子目录。
-4. 点「开始抓取」，界面显示阶段进度、警告与保存统计。抓取跑在 `Dispatchers.IO`，不阻塞主线程。
+4. 点「开始抓取」，先把列表翻完再批量下载：列表阶段显示页码，下载阶段显示「媒体 i/n」确定进度条，
+   最后给出警告与保存统计。抓取跑在 `Dispatchers.IO`，不阻塞主线程。
 
 Android 与 CLI 的登录态是两套：app 的 Cookie 留在 app-private 的 WebView CookieJar 里，不会自动写入
 CLI 的 `credentials.json`。首次安装需要分别登录。

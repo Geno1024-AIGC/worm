@@ -57,7 +57,6 @@ data class CrawlSession(
 /** Input to a crawl. [subject] is a QQ number, a Zhihu user token, etc., depending on the crawler. */
 data class CrawlRequest(
     val subject: String,
-    val maxItems: Int = Int.MAX_VALUE,
     val includeText: Boolean = false,
 )
 
@@ -76,6 +75,11 @@ data class CrawlReport(
     val warnings: List<String> = emptyList(),
 )
 
+/**
+ * One step of a crawl. Crawlers work in two phases: discover the full list
+ * ([stage] describes the list, [total] may be unknown), then download the discovered
+ * assets ([stage] = "媒体", [total] is the known asset count).
+ */
 data class CrawlProgress(
     val stage: String,
     val current: Int,

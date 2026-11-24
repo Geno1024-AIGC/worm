@@ -32,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -127,16 +126,6 @@ fun WormApp() {
                     onValueChange = viewModel::updateSubject,
                     label = { Text(ui.source.subjectHint) },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = ui.maxItemsText,
-                    onValueChange = viewModel::updateMaxItems,
-                    label = { Text("最多收集条数") },
-                    singleLine = true,
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                    ),
                     modifier = Modifier.fillMaxWidth(),
                 )
 

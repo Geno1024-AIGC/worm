@@ -69,6 +69,40 @@ class CoreTest {
     }
 
     @Test
+    fun `batch download has a fixed total and survives one failed asset`(@TempDir temp: File) {
+        val assets = (1..3).map { MediaAsset("https://example.com/$it.jpg", MediaKind.IMAGE, id = "m$it") }
+        val http = object : HttpPortal {
+            override fun get(url: String, session: CrawlSession, referer: String?, extraHeaders: Map<String, String>) =
+                HttpResponse(200, "", url)
+
+            override fun download(
+                url: String,
+                session: CrawlSession,
+                referer: String?,
+                target: File,
+                onBytes: (Long, Long?) -> Unit,
+            ): File {
+                if ("2.jpg" in url) throw java.io.IOException("boom")
+                target.writeBytes("x".toByteArray())
+                return target
+            }
+        }
+        val downloader = MediaDownloader(http, File(temp, "cache"), delayMs = 0)
+        val steps = mutableListOf<Pair<Int, Int>>()
+        val failures = mutableListOf<String>()
+        val saved = downloader.downloadAll(
+            assets,
+            CrawlSession(emptyMap()),
+            DirectoryMediaSink(File(temp, "media")),
+            onProgress = { current, total, _ -> steps += current to total },
+            onFailure = { asset, _ -> failures += asset.url },
+        )
+        assertEquals(listOf(1 to 3, 2 to 3, 3 to 3), steps)
+        assertEquals(2, saved.size)
+        assertEquals(listOf("https://example.com/2.jpg"), failures)
+    }
+
+    @Test
     fun `json output escapes strings`() {
         assertEquals("""{"a":"x\"y","b":[1,true]}""", JsonOutput.value(mapOf("a" to "x\"y", "b" to listOf(1, true))))
     }

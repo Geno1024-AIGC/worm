@@ -1,5 +1,7 @@
 package com.geno1024.ai.worm.qzone.shuoshuo
 
+import com.geno1024.ai.worm.core.CrawlListener
+import com.geno1024.ai.worm.core.CrawlProgress
 import com.geno1024.ai.worm.core.CrawlRequest
 import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.DirectoryMediaSink
@@ -38,6 +40,26 @@ class ShuoshuoCrawlerTest {
         }
     }
 
+    private class PagedHttp(private val first: String, private val second: String) : HttpPortal {
+        var calls = 0
+
+        override fun get(url: String, session: CrawlSession, referer: String?, extraHeaders: Map<String, String>): HttpResponse {
+            calls++
+            return HttpResponse(200, if (calls == 1) first else second, url)
+        }
+
+        override fun download(
+            url: String,
+            session: CrawlSession,
+            referer: String?,
+            target: File,
+            onBytes: (Long, Long?) -> Unit,
+        ): File {
+            target.writeBytes("payload".toByteArray())
+            return target
+        }
+    }
+
     private val session = CrawlSession(mapOf("p_skey" to "abc123", "uin" to "o99999"))
 
     @Test
@@ -63,6 +85,36 @@ class ShuoshuoCrawlerTest {
         assertEquals("t2-1.mp4", report.saved[1].name)
         assertTrue(File(temp, "media/images/t1-1.jpg").isFile)
         assertTrue(File(temp, "media/videos/t2-1.mp4").isFile)
+    }
+
+    @Test
+    fun `discovers every page before downloading with a determinate total`(@TempDir temp: File) = runBlocking {
+        val firstMessages = (1..20).joinToString(",") { i ->
+            """{"tid":"t$i","created_time":$i,"pic":[{"url":"https://p.qzone.com/$i.jpg"}]}"""
+        }
+        val first = """_preloadCallback({"code":0,"subcode":0,"total":100,"hasMore":true,"msglist":[$firstMessages]});"""
+        val second = """_preloadCallback({"code":0,"subcode":0,"total":100,"hasMore":false,"msglist":[{"tid":"t21","video":[{"raw_url":"https://v.qzone.com/21.mp4"}]}]});"""
+        val http = PagedHttp(first, second)
+        val events = mutableListOf<CrawlProgress>()
+        val listener = object : CrawlListener {
+            override fun onProgress(progress: CrawlProgress) {
+                events += progress
+            }
+        }
+        val crawler = ShuoshuoCrawler(http, File(temp, "cache"), downloadDelayMs = 0)
+        val report = crawler.collect(
+            CrawlRequest("12345"), session, DirectoryMediaSink(File(temp, "media")), listener,
+        )
+
+        assertEquals(2, http.calls)
+        assertEquals(21, report.items.size)
+        assertEquals(21, report.saved.size)
+        val listSteps = events.filter { it.stage == "说说列表" }
+        val mediaSteps = events.filter { it.stage == "媒体" }
+        assertEquals(listOf(1, 2), listSteps.map { it.current })
+        assertEquals((1..21).toList(), mediaSteps.map { it.current })
+        assertTrue(mediaSteps.all { it.total == 21 })
+        assertTrue(events.indexOf(listSteps.last()) < events.indexOf(mediaSteps.first()))
     }
 
     @Test

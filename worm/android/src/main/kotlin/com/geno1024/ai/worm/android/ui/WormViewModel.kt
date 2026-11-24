@@ -35,7 +35,6 @@ import java.util.Collections
 data class UiState(
     val source: Source = Source.QZONE_SHUOSHUO,
     val subject: String = "",
-    val maxItemsText: String = "200",
     val qqCookies: Map<String, String> = emptyMap(),
     val zhihuCookies: Map<String, String> = emptyMap(),
     val storageLabel: String = "应用私有目录",
@@ -81,10 +80,6 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(subject = value) }
     }
 
-    fun updateMaxItems(value: String) {
-        _state.update { it.copy(maxItemsText = value) }
-    }
-
     fun useStorage(context: Context, uri: Uri?) {
         if (uri != null) {
             val tree = DocumentFile.fromTreeUri(context, uri)
@@ -116,7 +111,6 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
             }
             try {
                 val current = _state.value
-                val maxItems = current.maxItemsText.toIntOrNull()?.coerceIn(1, 100_000) ?: 200
                 val session = sessionFor(current)
                 val http: HttpPortal = JdkHttpPortal(
                     userAgent = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 " +
@@ -136,7 +130,7 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
                     }
                 }
                 val report = crawler.collect(
-                    CrawlRequest(current.subject.trim(), maxItems),
+                    CrawlRequest(current.subject.trim()),
                     session,
                     sink,
                     listener,

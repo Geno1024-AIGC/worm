@@ -14,7 +14,6 @@ import com.geno1024.ai.worm.core.JdkHttpPortal
 import com.geno1024.ai.worm.core.MediaAsset
 import com.geno1024.ai.worm.core.MediaDownloader
 import com.geno1024.ai.worm.core.MediaSink
-import com.geno1024.ai.worm.core.SavedMedia
 import com.geno1024.ai.worm.core.optLongOf
 import com.geno1024.ai.worm.core.optStringOf
 import com.geno1024.ai.worm.core.objects
@@ -55,12 +54,13 @@ class ShuoshuoCrawler(
         require(targetUin.isNotBlank() && targetUin != "0") { "invalid QQ number: $target" }
 
         val items = mutableListOf<CollectedItem>()
-        val saved = mutableListOf<SavedMedia>()
         val warnings = mutableListOf<String>()
+        val seen = HashSet<String>()
         var pos = 0
         var page = 0
 
-        while (page < maxPages && items.size < request.maxItems) {
+        // Phase 1: discover every accessible page, without touching the network for bytes.
+        while (page < maxPages) {
             listener.onProgress(CrawlProgress("说说列表", page + 1, null, "pos=$pos"))
             val body = http.get(buildMsgListUrl(targetUin, auth.gtk, pos, PAGE_SIZE), auth.session, REFERER).body
             val parsed = parseMsgListResponse(body)
@@ -77,7 +77,6 @@ class ShuoshuoCrawler(
             if (messages.isEmpty()) break
 
             for (message in messages) {
-                if (items.size >= request.maxItems) break
                 val content = message.optStringOf("content", "contenttext")
                 val time = message.optLongOf("created_time", "time")
                 val assets = linkedMapOf<String, MediaAsset>()
@@ -88,14 +87,7 @@ class ShuoshuoCrawler(
                 }
 
                 for (asset in assets.values) {
-                    if (items.size >= request.maxItems) break
-                    items += CollectedItem.Media(asset)
-                    try {
-                        downloader.download(asset, auth.session, sink)?.let(saved::add)
-                        listener.onProgress(CrawlProgress("媒体", saved.size, items.size, asset.url))
-                    } catch (e: Exception) {
-                        warnings += "下载失败 ${asset.url}: ${e.message}"
-                    }
+                    if (seen.add("${asset.kind.name}:${asset.url}")) items += CollectedItem.Media(asset)
                 }
                 if (request.includeText && !content.isNullOrBlank()) {
                     items += CollectedItem.Text(
@@ -116,6 +108,16 @@ class ShuoshuoCrawler(
             page++
         }
 
+        // Phase 2: the asset list is fixed, so the progress bar has a real total.
+        val saved = downloader.downloadAll(
+            assets = items.filterIsInstance<CollectedItem.Media>().map { it.asset },
+            session = auth.session,
+            sink = sink,
+            onProgress = { current, total, asset ->
+                listener.onProgress(CrawlProgress("媒体", current, total, asset.url))
+            },
+            onFailure = { asset, error -> warnings += "下载失败 ${asset.url}: ${error.message}" },
+        )
         return CrawlReport(id, targetUin, items, saved, warnings)
     }
 }
