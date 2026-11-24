@@ -69,6 +69,11 @@ class CoreTest {
     }
 
     @Test
+    fun `json output escapes strings`() {
+        assertEquals("""{"a":"x\"y","b":[1,true]}""", JsonOutput.value(mapOf("a" to "x\"y", "b" to listOf(1, true))))
+    }
+
+    @Test
     fun `directory sink stores under safe relative directory`(@TempDir temp: File) {
         val sink = DirectoryMediaSink(temp)
         val asset = MediaAsset(
