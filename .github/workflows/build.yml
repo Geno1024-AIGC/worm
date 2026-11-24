@@ -1,0 +1,234 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Test and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # env is the commit count, so a shallow clone would stamp the wrong version.
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Test
+        run: ./gradlew test
+
+      - name: Lint the shipping variant
+        run: ./gradlew :worm:android:lintRelease
+
+      - name: Keep the lint report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lint-report
+          path: worm/android/build/reports/lint-results-release.*
+          if-no-files-found: ignore
+
+  release:
+    name: Sign and package
+    needs: verify
+    # Pull requests have no org secrets and must never publish.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    outputs:
+      version_name: ${{ steps.version.outputs.version_name }}
+      version_code: ${{ steps.version.outputs.version_code }}
+      short_sha: ${{ steps.version.outputs.short_sha }}
+      head_sha: ${{ steps.version.outputs.head_sha }}
+      file_name: ${{ steps.version.outputs.file_name }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Materialize keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "::error::KEYSTORE_BASE64 is not available to this repository; authorize the org secret per RULES/KEYSTORE.md."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore.jks"
+
+      - name: Assemble signed release APK
+        env:
+          KEYSTORE_STORE_FILE: ${{ runner.temp }}/keystore.jks
+          KEYSTORE_STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+          KEYSTORE_KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
+          BUILD_COUNT_TOKEN: ${{ secrets.BUILD_COUNT_TOKEN }}
+          BUILD_COUNT_URL: ${{ secrets.BUILD_COUNT_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BUILD_COUNT_TOKEN:-}" ] || [ -z "${BUILD_COUNT_URL:-}" ]; then
+            echo "::error::BUILD_COUNT_TOKEN and BUILD_COUNT_URL are required: packaging builds must be counted."
+            exit 1
+          fi
+          # Qualified so only the Android module's build-count is incremented.
+          ./gradlew :worm:android:assembleRelease
+
+      - name: Verify the APK is signed
+        run: |
+          set -euo pipefail
+          apk=worm/android/build/outputs/apk/release/android-release.apk
+          if [ ! -f "$apk" ]; then
+            echo "::error::$apk was not produced."
+            exit 1
+          fi
+          apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          "$apksigner" verify --print-certs "$apk"
+
+      - name: Stamp the artifact
+        id: version
+        # The built APK is the only source of release metadata (RULES/VERSION.md).
+        run: |
+          set -euo pipefail
+          apk=worm/android/build/outputs/apk/release/android-release.apk
+          aapt2="$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)"
+
+          badging="$("$aapt2" dump badging "$apk")"
+          version_name="$(sed -n "s/.* versionName='\([^']*\)'.*/\1/p" <<< "$badging")"
+          version_code="$(sed -n "s/.* versionCode='\([^']*\)'.*/\1/p" <<< "$badging")"
+          short_sha="$(git rev-parse --short=8 HEAD)"
+          head_sha="$(git rev-parse HEAD)"
+
+          if [ -z "$version_name" ] || [ -z "$version_code" ]; then
+            echo "::error::could not read a version out of the built APK"
+            exit 1
+          fi
+
+          file_name="worm-${version_name}-build${GITHUB_RUN_NUMBER}-${short_sha}.apk"
+          mkdir -p dist
+          cp "$apk" "dist/$file_name"
+
+          {
+            echo "version_name=$version_name"
+            echo "version_code=$version_code"
+            echo "short_sha=$short_sha"
+            echo "head_sha=$head_sha"
+            echo "file_name=$file_name"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Built $file_name (versionCode $version_code)"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-release
+          path: dist/*.apk
+          if-no-files-found: error
+
+  canary:
+    name: Publish canary
+    needs: release
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: android-release
+          path: apk
+
+      - name: Publish rolling pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: canary
+          VERSION_NAME: ${{ needs.release.outputs.version_name }}
+          VERSION_CODE: ${{ needs.release.outputs.version_code }}
+          SHORT_SHA: ${{ needs.release.outputs.short_sha }}
+          FILE_NAME: ${{ needs.release.outputs.file_name }}
+          FULL_SHA: ${{ needs.release.outputs.head_sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          mapfile -t built < <(find apk -maxdepth 1 -name '*.apk')
+          if [ "${#built[@]}" -ne 1 ]; then
+            echo "::error::expected exactly one APK under apk/, found ${#built[@]}"
+            exit 1
+          fi
+          artifact="${built[0]}"
+          subject="$(git log -1 --pretty=%s)"
+          notes="$(printf 'Build #%s, version `%s` (versionCode `%s`), commit `%s`.\n\n%s\n\nSigned canary APK.' \
+            "$RUN_NUMBER" "$VERSION_NAME" "$VERSION_CODE" "$SHORT_SHA" "$subject")"
+
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          git push origin --delete "refs/tags/$TAG" 2>/dev/null || true
+          git tag -d "$TAG" 2>/dev/null || true
+          git tag "$TAG" "$FULL_SHA"
+          git push --force origin "refs/tags/$TAG"
+
+          gh release create "$TAG" "$artifact" \
+            --title "Worm $VERSION_NAME canary" \
+            --notes "$notes" \
+            --prerelease
+
+          # GitHub briefly exposes an unpublished release; wait until the tag is public.
+          expected="Worm $VERSION_NAME canary"
+          ok=0
+          draft=""
+          for attempt in 1 2 3 4 5 6; do
+            gh release edit "$TAG" --draft=false --prerelease >/dev/null 2>&1 || true
+            draft="$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '.draft' 2>/dev/null || true)"
+            if [ "$draft" = "false" ]; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::canary release is not published at tag $TAG (draft='$draft')"
+            exit 1
+          fi
+
+          echo "Published https://github.com/$GH_REPO/releases/tag/$TAG"
