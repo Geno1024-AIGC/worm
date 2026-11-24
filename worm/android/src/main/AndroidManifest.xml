@@ -4,8 +4,10 @@
     <!-- WebView login and the shared HttpURLConnection crawlers. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- QQ/Zhihu WebView login still redirects through some http:// hops. -->
     <application
         android:allowBackup="false"
+        android:usesCleartextTraffic="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Worm">
