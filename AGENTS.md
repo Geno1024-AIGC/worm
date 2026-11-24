@@ -6,6 +6,7 @@
 
 - `:worm:core` 只放跨爬虫共享能力：接口、数据模型、HTTP、cookie、媒体落盘。
 - 每个目标站/功能一个模块，放在 `worm/<name>/`，只依赖 `:worm:core`，爬虫之间互不依赖。
+- 同一站点多个功能共享的解析/登录态可放在 `:worm:<site>:common` 库模块（如 `:worm:qzone:common`），由该功能下的爬虫依赖。
 - 解析函数必须接收 `String` / `JSONObject` 等纯输入并返回模型，离线 fixture 单测覆盖；测试不访问网络。
 - 所有实现都运行在 JVM 与 Android 上：只用 `HttpURLConnection` / `java.io` / jsoup / org.json，
   不用 `java.net.http`、不使用桌面浏览器 API。Android 专属的登录与存储经 `CrawlSession` / `MediaSink` 注入。

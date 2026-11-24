@@ -19,6 +19,7 @@ dependencyResolutionManagement {
 rootProject.name = "worm"
 
 include(":worm:core")
+include(":worm:qzone:common")
 include(":worm:qzone:shuoshuo")
 include(":worm:qzone:album")
 include(":worm:zhihu")

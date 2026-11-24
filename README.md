@@ -8,6 +8,7 @@ CLI 与 Android app 使用同一份实现。
 | 路径 | 说明 |
 | --- | --- |
 | `:worm:core` | 爬虫接口、数据模型、HTTP/存储抽象（JVM + Android 共用） |
+| `:worm:qzone:common` | Qzone 共享登录态、JSONP 与媒体解析（库） |
 | `:worm:qzone:shuoshuo` | QQ 空间说说 |
 | `:worm:qzone:album` | QQ 空间相册 |
 | `:worm:zhihu` | 知乎用户回答 / 文章 / 动态 |
