@@ -65,7 +65,7 @@ class AlbumCrawlerTest {
         val kinds = report.items.map { (it as CollectedItem.Media).asset.kind }
         assertEquals(listOf(MediaKind.IMAGE, MediaKind.VIDEO, MediaKind.IMAGE), kinds)
         assertTrue(report.items[2].let { it as CollectedItem.Media }.asset.isCover)
-        assertTrue(File(temp, "media/albums/Trip/p1.jpg").isFile)
-        assertTrue(File(temp, "media/albums/Trip/p2.mp4").isFile)
+        assertTrue(File(temp, "media/qzone/12345/album/p1.jpg").isFile)
+        assertTrue(File(temp, "media/qzone/12345/album/p2.mp4").isFile)
     }
 }

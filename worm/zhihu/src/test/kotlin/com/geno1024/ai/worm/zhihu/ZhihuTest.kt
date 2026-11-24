@@ -66,8 +66,8 @@ class ZhihuTest {
         assertEquals(3, report.items.size)
         assertEquals(3, report.saved.size)
         assertTrue(http.lastUrl.contains("/members/geno/answers"))
-        assertTrue(File(temp, "media/images/a1-1.jpg").isFile)
-        assertTrue(File(temp, "media/videos/a1-2.mp4").isFile)
+        assertTrue(File(temp, "media/zhihu/geno/image/a1-1.jpg").isFile)
+        assertTrue(File(temp, "media/zhihu/geno/video/a1-2.mp4").isFile)
     }
 
     @Test

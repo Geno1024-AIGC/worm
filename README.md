@@ -17,7 +17,18 @@ JVM CLI 与 Android app 使用同一份实现。第一阶段只落盘图片与�
 | `:worm:android` | Jetpack Compose Android app |
 
 爬虫只产出 `CollectedItem.Media`（`--include-text` 会额外产出 `CollectedItem.Text` 供后续 exporter 使用）。
-视频只有拿到真实播放地址才存到 `videos/`；只有封面时按图片存到 `images/` 并标记 `isCover`。
+媒体按内容分目录落盘，而不是全部堆在一个目录：
+
+```
+<输出目录>/media/
+  qzone/<QQ号>/image/<图片>.jpg        # 说说图片
+  qzone/<QQ号>/video/<视频>.mp4        # 说说视频
+  qzone/<QQ号>/album/<文件>.jpg        # 相册图片/视频同放（文件名已含照片 ID）
+  zhihu/<url_token>/image/<图片>.jpg  # 知乎图片
+  zhihu/<url_token>/video/<视频>.mp4  # 知乎视频
+```
+
+视频只有拿到真实播放地址才存为视频；只有封面时按图片保存并标记 `isCover`。
 所有下载先写 `.part` 再原子改名，避免把半截文件当成品。
 
 ## JVM CLI

@@ -101,7 +101,10 @@ class AlbumCrawler(
 
                 for (photo in photos) {
                     for (asset in extractAlbumPhotoMedia(photo, album.name)) {
-                        if (seen.add("${asset.kind.name}:${asset.url}")) items += CollectedItem.Media(asset)
+                        // Album media keeps its own folder; images and videos stay together
+                        // because the photo id already makes each filename unique.
+                        val placed = asset.copy(relativeDir = "qzone/$targetUin/album")
+                        if (seen.add("${placed.kind.name}:${placed.url}")) items += CollectedItem.Media(placed)
                     }
                 }
 

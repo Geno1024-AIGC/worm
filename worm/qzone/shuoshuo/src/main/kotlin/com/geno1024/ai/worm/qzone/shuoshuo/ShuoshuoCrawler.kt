@@ -13,6 +13,7 @@ import com.geno1024.ai.worm.core.HtmlMedia
 import com.geno1024.ai.worm.core.JdkHttpPortal
 import com.geno1024.ai.worm.core.MediaAsset
 import com.geno1024.ai.worm.core.MediaDownloader
+import com.geno1024.ai.worm.core.MediaKind
 import com.geno1024.ai.worm.core.MediaSink
 import com.geno1024.ai.worm.core.optLongOf
 import com.geno1024.ai.worm.core.optStringOf
@@ -87,7 +88,9 @@ class ShuoshuoCrawler(
                 }
 
                 for (asset in assets.values) {
-                    if (seen.add("${asset.kind.name}:${asset.url}")) items += CollectedItem.Media(asset)
+                    val folder = if (asset.kind == MediaKind.IMAGE) "image" else "video"
+                    val placed = asset.copy(relativeDir = "qzone/$targetUin/$folder")
+                    if (seen.add("${placed.kind.name}:${placed.url}")) items += CollectedItem.Media(placed)
                 }
                 if (request.includeText && !content.isNullOrBlank()) {
                     items += CollectedItem.Text(

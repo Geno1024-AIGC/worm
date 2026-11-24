@@ -11,6 +11,7 @@ import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.HttpPortal
 import com.geno1024.ai.worm.core.JdkHttpPortal
 import com.geno1024.ai.worm.core.MediaDownloader
+import com.geno1024.ai.worm.core.MediaKind
 import com.geno1024.ai.worm.core.MediaSink
 import java.io.File
 
@@ -74,7 +75,9 @@ class ZhihuCrawler(
 
                 for (content in parsed.contents) {
                     for (asset in content.media) {
-                        if (seen.add("${asset.kind.name}:${asset.url}")) items += CollectedItem.Media(asset)
+                        val folder = if (asset.kind == MediaKind.IMAGE) "image" else "video"
+                        val placed = asset.copy(relativeDir = "zhihu/$token/$folder")
+                        if (seen.add("${placed.kind.name}:${placed.url}")) items += CollectedItem.Media(placed)
                     }
                     if (request.includeText && content.html.isNotBlank()) {
                         items += CollectedItem.Text(

@@ -83,8 +83,8 @@ class ShuoshuoCrawlerTest {
         assertEquals(MediaKind.VIDEO, (report.items[1] as com.geno1024.ai.worm.core.CollectedItem.Media).asset.kind)
         assertEquals("t1-1.jpg", report.saved[0].name)
         assertEquals("t2-1.mp4", report.saved[1].name)
-        assertTrue(File(temp, "media/images/t1-1.jpg").isFile)
-        assertTrue(File(temp, "media/videos/t2-1.mp4").isFile)
+        assertTrue(File(temp, "media/qzone/12345/image/t1-1.jpg").isFile)
+        assertTrue(File(temp, "media/qzone/12345/video/t2-1.mp4").isFile)
     }
 
     @Test
