@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose Material 3 owns the in-app colours; the XML theme only boots the activity. -->
+    <style name="Theme.Worm" parent="@android:style/Theme.Material.Light.NoActionBar" />
+</resources>
