@@ -23,9 +23,13 @@ fun extractMessageMedia(message: JSONObject): List<MediaAsset> {
     val result = linkedMapOf<String, MediaAsset>()
     val tid = message.optStringOf("tid", "id")
     val messageTime = message.optLongOf("created_time", "time")
+    var counter = 0
 
     fun add(url: String, kind: MediaKind, cover: Boolean, id: String?, time: Long?) {
         if (!url.startsWith("http://") && !url.startsWith("https://")) return
+        // One post can carry several images: <tid>-<n> keeps the old CLI's naming
+        // convention and prevents later assets from overwriting earlier ones.
+        val suggested = id?.let { "$it-${++counter}" }
         val asset = MediaAsset(
             url = url,
             kind = kind,
@@ -34,6 +38,7 @@ fun extractMessageMedia(message: JSONObject): List<MediaAsset> {
             referer = REFERER,
             extension = MediaFiles.extensionOf(url, kind),
             isCover = cover,
+            suggestedName = suggested,
         )
         result.putIfAbsent("${kind.name}:$url", asset)
     }
