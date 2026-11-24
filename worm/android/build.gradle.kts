@@ -1,4 +1,5 @@
 import com.geno1024.ai.worm.gradle.Versioning
+import org.gradle.api.tasks.testing.Test
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
@@ -90,6 +91,10 @@ android {
     }
 }
 
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_17
@@ -116,4 +121,12 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
     debugImplementation(libs.compose.ui.tooling)
+
+    // Offline unit tests for the release parser. Android provides org.json on device;
+    // local JVM tests need the real jar or the mockable android.jar would return defaults.
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter.api)
+    testRuntimeOnly(libs.junit.jupiter.engine)
+    testRuntimeOnly(libs.junit.platform.launcher)
+    testImplementation(libs.org.json)
 }

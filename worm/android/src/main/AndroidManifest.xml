@@ -4,6 +4,21 @@
     <!-- WebView login and the shared HttpURLConnection crawlers. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- APK updates are handed to the system installer; this app never installs silently. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Android 11+ hides other apps unless declared: the installer must be resolvable. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.INSTALL_PACKAGE" />
+            <data android:mimeType="application/vnd.android.package-archive" />
+        </intent>
+    </queries>
+
     <!-- QQ/Zhihu WebView login still redirects through some http:// hops. -->
     <application
         android:allowBackup="false"
@@ -26,6 +41,17 @@
             android:name=".LoginActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- The cached APK lives under cacheDir/update/; the installer reads it via this URI. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
     </application>
 
 </manifest>

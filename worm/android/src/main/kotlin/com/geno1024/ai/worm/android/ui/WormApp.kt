@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
@@ -26,7 +27,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -34,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.geno1024.ai.worm.android.LoginActivity
 import com.geno1024.ai.worm.android.site.Source
+import com.geno1024.ai.worm.android.ui.update.UpdateScreen
 import kotlinx.coroutines.launch
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -44,6 +49,7 @@ fun WormApp() {
     val ui by viewModel.state.collectAsStateWithLifecycle()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    var showUpdates by remember { mutableStateOf(false) }
 
     val loginLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -74,6 +80,16 @@ fun WormApp() {
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
                 }
+                HorizontalDivider(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                NavigationDrawerItem(
+                    label = { Text("检查更新") },
+                    selected = showUpdates,
+                    onClick = {
+                        showUpdates = true
+                        scope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
                 Text(
                     "从屏幕左侧滑出可随时切换抓取源",
                     style = MaterialTheme.typography.bodySmall,
@@ -82,6 +98,9 @@ fun WormApp() {
             }
         },
     ) {
+        if (showUpdates) {
+            UpdateScreen(onBack = { showUpdates = false })
+        } else {
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -175,6 +194,7 @@ fun WormApp() {
                     }
                 }
             }
+        }
         }
     }
 }
