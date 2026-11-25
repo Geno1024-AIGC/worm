@@ -126,7 +126,8 @@ class AlbumCrawler(
                 val albumPages = pageCountOf(photoPage.totalInAlbum, pageSize)
                 listener.onProgress(CrawlProgress(
                     "相册", albumIndex + 1, albums.size,
-                    "${album.name} · 第${page + 1}页${albumPages?.let { "/$it" } ?: ""}，已发现 ${items.size} 项",
+                    "${album.name} · 第${page + 1}页${albumPages?.let { "/$it" } ?: ""}，已发现 ${items.size} 项" +
+                        if (since != null) "，增量" else "",
                 ))
                 if (isAuthError(photoPage.code, photoPage.subcode)) {
                     warnings += "${album.name}: 登录态失效（code=${photoPage.code}）"
@@ -162,7 +163,13 @@ class AlbumCrawler(
                     }
                 }
 
-                if (reachedWatermark(pageTimes, since)) break
+                if (reachedWatermark(pageTimes, since)) {
+                    listener.onProgress(CrawlProgress(
+                        "相册", albumIndex + 1, albums.size,
+                        "${album.name}：命中上次抓取时间，提前结束",
+                    ))
+                    break
+                }
                 val next = photoPage.nextPageStart ?: (start + photoPage.totalInPage)
                 if (next <= start) break
                 start = next

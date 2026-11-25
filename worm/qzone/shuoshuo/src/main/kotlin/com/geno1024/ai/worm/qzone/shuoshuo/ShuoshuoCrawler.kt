@@ -70,7 +70,8 @@ class ShuoshuoCrawler(
             val parsed = parseMsgListResponse(body)
             val pages = pageCountOf(parsed.total, PAGE_SIZE)
             listener.onProgress(CrawlProgress(
-                "说说列表", page + 1, pages, "pos=$pos${pages?.let { "，共 $it 页" } ?: ""}",
+                "说说列表", page + 1, pages,
+                "pos=$pos${pages?.let { "，共 $it 页" } ?: ""}${if (since != null) "，增量" else ""}",
             ))
             if (isAuthError(parsed.code, parsed.subcode)) {
                 warnings += "登录态失效（code=${parsed.code}, subcode=${parsed.subcode}），请重新登录"
@@ -123,7 +124,9 @@ class ShuoshuoCrawler(
             }
 
             if (reachedWatermark(pageTimes, since)) {
-                warnings += "增量抓取在第 ${page + 1} 页命中上次抓取时间，提前结束（接口显示共 ${pages ?: "?"} 页）"
+                val detail = "命中上次抓取时间，提前结束（接口估算共 ${pages ?: "?"} 页）"
+                listener.onProgress(CrawlProgress("说说列表", page + 1, null, detail))
+                warnings += "增量抓取在第 ${page + 1} 页$detail"
                 break
             }
             if (!parsed.hasMore) break

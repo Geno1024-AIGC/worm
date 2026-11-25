@@ -68,8 +68,17 @@ fun parseZhihuListPage(
 ): ZhihuListPage {
     val root = Jsonp.objectOrNull(body)
         ?: return ZhihuListPage(emptyList(), null, responseProblem(body))
-    val error = root.optStringOf("error", "message")?.takeIf { root.opt("data") == null && root.optInt("code") != 0 }
-    if (error != null) return ZhihuListPage(emptyList(), null, error)
+    val errorObject = root.optObjectOf("error")
+    val code = errorObject?.optInt("code", 0)?.takeIf { it != 0 } ?: root.optInt("code", 0)
+    val message = errorObject?.optStringOf("message", "msg") ?: root.optStringOf("message")
+    if (root.opt("data") == null && (errorObject != null || code != 0)) {
+        val problem = when {
+            code == 40353 || code == 403 || message?.contains("unhuman", ignoreCase = true) == true ->
+                "需要登录或触发风控"
+            else -> "接口错误"
+        }
+        return ZhihuListPage(emptyList(), null, "$problem（code=$code）${message?.let { "：$it" } ?: ""}")
+    }
 
     val data = root.optArrayOf("data") ?: return ZhihuListPage(emptyList(), null, null)
     val contents = data.objects().mapNotNull { extractZhihuContent(it, kind, referer, upgradeImages) }

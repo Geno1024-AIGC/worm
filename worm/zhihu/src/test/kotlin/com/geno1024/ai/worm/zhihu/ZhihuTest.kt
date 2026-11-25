@@ -95,6 +95,17 @@ class ZhihuTest {
     }
 
     @Test
+    fun `anti bot error code is reported as a login or risk problem`() {
+        val page = parseZhihuListPage(
+            """{"error":{"code":40353,"message":"unhuman"}}""",
+            ZhihuKind.ANSWER, "https://www.zhihu.com/",
+        )
+        val error = page.error ?: error("expected a readable anti-bot warning")
+        assertTrue(error.contains("风控"))
+        assertTrue(error.contains("40353"))
+    }
+
+    @Test
     fun `thumbnail upgrade candidates keep host and query`() {
         val small = "https://picx.zhimg.com/v2-abc_r.jpg?source=c8b7c179"
         assertEquals(

@@ -57,7 +57,10 @@ class ZhihuCrawler(
             var offset = 0
             var page = 0
             while (page < maxPagesPerKind) {
-                listener.onProgress(CrawlProgress(kind.name, page + 1, null, "offset=$offset，已发现 ${items.size} 项"))
+                listener.onProgress(CrawlProgress(
+                    kind.name, page + 1, null,
+                    "offset=$offset，已发现 ${items.size} 项${if (since != null) "，增量" else ""}",
+                ))
                 val url = buildZhihuListUrl(token, kind, offset, pageSize)
                 var response = http.get(url, session, REFERER, API_HEADERS)
                 if (!usable(response, kind, warnings)) break
@@ -103,7 +106,10 @@ class ZhihuCrawler(
                     }
                 }
 
-                if (reachedWatermark(pageTimes, since)) break
+                if (reachedWatermark(pageTimes, since)) {
+                    listener.onProgress(CrawlProgress(kind.name, page + 1, null, "命中上次抓取时间，提前结束"))
+                    break
+                }
                 val next = parsed.nextOffset
                 if (next == null || next <= offset) break
                 offset = next
