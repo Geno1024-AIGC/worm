@@ -235,6 +235,15 @@ private fun AndroidWebView(
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                if (site == Site.ZHIHU) {
+                    // Zhihu sees the "; wv" / "Version/4.0" markers in the default
+                    // WebView UA and swaps the login form for an "open in app" page.
+                    // Keep the device's real model and Chrome version, drop only the
+                    // WebView markers so this looks like an ordinary mobile Chrome.
+                    settings.userAgentString = settings.userAgentString
+                        .replace("; wv", "")
+                        .replace("Version/4.0 ", "")
+                }
                 CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
@@ -244,16 +253,13 @@ private fun AndroidWebView(
                     }
                 }
                 webViewClient = object : WebViewClient() {
-                    // Zhihu pushes the native app via zhihu:// and intent:// deep links;
-                    // with no app installed these strand the WebView on a page with no
-                    // login form. Keep only web schemes inside the WebView.
+                    // Swallow only Zhihu's own app deep links. Blocking every non-web
+                    // scheme broke the sign-in page's scripts, so leave intent/data/blob
+                    // alone — the cleaned UA already keeps the login form visible.
                     override fun shouldOverrideUrlLoading(
                         view: WebView?,
                         request: WebResourceRequest?,
-                    ): Boolean = when (request?.url?.scheme?.lowercase()) {
-                        "http", "https", "about", "data", "blob" -> false
-                        else -> true
-                    }
+                    ): Boolean = request?.url?.scheme?.lowercase()?.startsWith("zhihu") == true
 
                     override fun onPageFinished(view: WebView?, url: String?) = check()
                     override fun doUpdateVisitedHistory(
@@ -269,7 +275,7 @@ private fun AndroidWebView(
                 loadUrl(
                     when (site) {
                         Site.QQ -> "https://user.qzone.qq.com/"
-                        Site.ZHIHU -> "https://www.zhihu.com/"
+                        Site.ZHIHU -> "https://www.zhihu.com/signin?next=%2F"
                     },
                 )
                 onReady(this)
