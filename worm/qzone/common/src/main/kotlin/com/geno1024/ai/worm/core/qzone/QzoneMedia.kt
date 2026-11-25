@@ -14,8 +14,11 @@ private const val REFERER = "https://user.qzone.qq.com/"
 private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "m4v", "avi", "mkv", "flv", "webm")
 private val IMAGE_KEYS = listOf("burl", "raw", "url3", "url2", "url1", "smallurl", "curl", "url", "photo_url")
 private val VIDEO_KEYS = listOf(
-    "videourl", "raw_url", "download_url", "video_url", "origin_video_url", "raw_video_url",
-    "play_url", "url", "raw", "videourl",
+    // Qzone's h5 payload puts the playable MP4 in `url3`, both on `video[]`
+    // entries and inside `pic[].video_info`. `url`/`raw` are usually the cover
+    // JPEG, so they must come after `url3` and never win when a playable URL exists.
+    "videourl", "video_url", "raw_url", "download_url", "origin_video_url", "raw_video_url",
+    "play_url", "url3", "url", "raw",
 )
 
 /** Reads image/video URLs from one Qzone message (including reposts). Pure and fixture-testable. */

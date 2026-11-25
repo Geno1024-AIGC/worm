@@ -60,6 +60,27 @@ class QzoneCommonTest {
     }
 
     @Test
+    fun `qzone playable url3 wins over cover jpg`() {
+        // Real h5 payload: video[] uses url3 for the MP4 and url1/pic_url for covers;
+        // a video pic carries the same url3 inside video_info.
+        val json = """
+            {"tid":"t3","created_time":1700000123,
+             "pic":[{"is_video":1,"url1":"https://p.qzone.com/cover.jpg",
+                     "video_info":{"url3":"https://photovideo.photo.qq.com/clip.mp4"}}],
+             "video":[{"video_id":"v1","pic_url":"https://p.qzone.com/cover2.jpg",
+                       "url1":"https://p.qzone.com/thumb.jpg",
+                       "url3":"https://photovideo.photo.qq.com/clip2.mp4"}]}
+        """.trimIndent()
+        val assets = extractMessageMedia(org.json.JSONObject(json))
+        assertEquals(2, assets.size)
+        assertTrue(assets.all { it.kind == MediaKind.VIDEO })
+        assertTrue(assets.all { it.extension == "mp4" })
+        assertTrue(assets.all { it.createdAt == 1700000123L })
+        assertTrue(assets.any { it.url == "https://photovideo.photo.qq.com/clip.mp4" })
+        assertTrue(assets.any { it.url == "https://photovideo.photo.qq.com/clip2.mp4" })
+    }
+
+    @Test
     fun `credentials roundtrip`(@TempDir temp: File) {
         val file = File(temp, "nested/credentials.json")
         val session = CrawlSession(mapOf("p_skey" to "secret", "uin" to "o123"))
