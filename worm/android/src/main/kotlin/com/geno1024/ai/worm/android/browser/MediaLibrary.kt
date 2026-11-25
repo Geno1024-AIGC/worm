@@ -40,6 +40,9 @@ private fun formatMediaTime(epochMillis: Long?, formatter: DateTimeFormatter): S
         formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault()))
     } ?: "时间未知"
 
+/** The manifest stores Unix seconds; [LocalMedia.modifiedAt] and file mtimes are milliseconds. */
+internal fun manifestMillis(seconds: Long?): Long? = seconds?.takeIf { it > 0 }?.let { it * 1000L }
+
 /** Newest first; files without a usable mtime go last, then keep a stable name order. */
 fun sortMediaByTime(media: List<LocalMedia>): List<LocalMedia> =
     media.sortedWith(
@@ -105,7 +108,8 @@ class MediaLibrary(
                     name = name,
                     kind = kind,
                     uri = document.uri,
-                    modifiedAt = mediaTimes.get(path) ?: document.lastModified().takeIf { it > 0 },
+                    modifiedAt = manifestMillis(mediaTimes.secondsAt(path))
+                        ?: document.lastModified().takeIf { it > 0 },
                 )
             }.let(::sortMediaByTime),
         )
@@ -131,7 +135,8 @@ class MediaLibrary(
                     name = file.name,
                     kind = kind,
                     file = file,
-                    modifiedAt = mediaTimes.get(path) ?: file.lastModified().takeIf { it > 0 },
+                    modifiedAt = manifestMillis(mediaTimes.secondsAt(path))
+                        ?: file.lastModified().takeIf { it > 0 },
                 )
             }.let(::sortMediaByTime),
         )
@@ -142,7 +147,8 @@ class MediaLibrary(
         val children = dir.listFiles()
         val direct = children.filter { it.isFile() }.mapNotNull { document ->
             val name = document.name ?: return@mapNotNull null
-            mediaTimes.get(childFolder(prefix, name)) ?: document.lastModified().takeIf { it > 0 }
+            manifestMillis(mediaTimes.secondsAt(childFolder(prefix, name)))
+                ?: document.lastModified().takeIf { it > 0 }
         }
         val nested = children.filter { it.isDirectory() }.mapNotNull { child ->
             child.name?.let { name -> newestAtSaf(child, childFolder(prefix, name)) }
@@ -153,7 +159,7 @@ class MediaLibrary(
     private fun newestAtPrivate(root: File, dir: File, prefix: String): Long? = runCatching {
         dir.walkTopDown().filter { it.isFile() }
             .mapNotNull { file ->
-                mediaTimes.get(childFolder(prefix, file.toRelativeString(root)))
+                manifestMillis(mediaTimes.secondsAt(childFolder(prefix, file.toRelativeString(root))))
                     ?: file.lastModified().takeIf { it > 0 }
             }
             .maxOrNull()

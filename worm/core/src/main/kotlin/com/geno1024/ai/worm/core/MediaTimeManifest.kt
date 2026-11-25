@@ -6,15 +6,18 @@ import java.io.File
 /**
  * Publish times for saved files whose filesystem mtime cannot be set (notably some
  * SAF providers). Keys are paths relative to the storage root, the same ids the
- * browser uses. Best-effort: a corrupt or unwritable manifest never fails a crawl.
+ * browser uses. Values are Unix SECONDS, the unit of [MediaAsset.createdAt] — file
+ * mtimes are milliseconds, so callers must convert before formatting. Best-effort:
+ * a corrupt or unwritable manifest never fails a crawl.
  */
 class MediaTimeManifest(private val file: File) {
-    fun get(path: String): Long? = read()[key(path)]
+    /** Publish time in Unix seconds; null when no time was recorded. */
+    fun secondsAt(path: String): Long? = read()[key(path)]
 
-    /** Pass [createdAt] = null to forget a stale entry (e.g. a forced re-download). */
-    fun record(path: String, createdAt: Long?) {
+    /** Pass [createdAtSeconds] = null to forget a stale entry (e.g. a forced re-download). */
+    fun recordSeconds(path: String, createdAtSeconds: Long?) {
         val current = read()
-        if (createdAt != null && createdAt > 0) current[key(path)] = createdAt
+        if (createdAtSeconds != null && createdAtSeconds > 0) current[key(path)] = createdAtSeconds
         else current.remove(key(path))
         write(current)
     }

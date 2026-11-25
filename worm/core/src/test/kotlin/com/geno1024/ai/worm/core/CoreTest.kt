@@ -203,13 +203,13 @@ class CoreTest {
     @Test
     fun `media time manifest survives reload and forgets stale times`(@TempDir temp: File) {
         val manifest = MediaTimeManifest(File(temp, "state/media-times.json"))
-        manifest.record("qzone/123/a.jpg", 1_700_000_000L)
-        manifest.record("qzone/123/b.jpg", null)
+        manifest.recordSeconds("qzone/123/a.jpg", 1_700_000_000L)
+        manifest.recordSeconds("qzone/123/b.jpg", null)
         val reloaded = MediaTimeManifest(File(temp, "state/media-times.json"))
-        assertEquals(1_700_000_000L, reloaded.get("/qzone/123/a.jpg"))
-        assertNull(reloaded.get("qzone/123/b.jpg"))
-        reloaded.record("qzone/123/a.jpg", null)
-        assertNull(reloaded.get("qzone/123/a.jpg"))
+        assertEquals(1_700_000_000L, reloaded.secondsAt("/qzone/123/a.jpg"))
+        assertNull(reloaded.secondsAt("qzone/123/b.jpg"))
+        reloaded.recordSeconds("qzone/123/a.jpg", null)
+        assertNull(reloaded.secondsAt("qzone/123/a.jpg"))
     }
 
     @Test

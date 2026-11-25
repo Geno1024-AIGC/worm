@@ -18,7 +18,7 @@ class ManifestMediaSink(
         val saved = delegate.accept(asset, source)
         val folder = asset.relativeDir.trim().trim('/')
         val path = if (folder.isBlank()) saved.name else "$folder/${saved.name}"
-        manifest.record(path, asset.createdAt)
+        manifest.recordSeconds(path, asset.createdAt)
         return saved
     }
 }
