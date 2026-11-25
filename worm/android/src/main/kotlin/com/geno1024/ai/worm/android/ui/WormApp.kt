@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,7 +34,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -46,6 +46,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -211,9 +212,17 @@ fun WormApp() {
 
                     ui.lastRun?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                     Text(
-                        "增量抓取只翻上次成功之后的新内容；强制更新会重翻所有页（已存在文件仍跳过）。",
+                        "没有抓取记录时爬全部；有记录时只爬更新。",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = ui.forceAll,
+                            onCheckedChange = viewModel::setForceAll,
+                            enabled = !ui.running,
+                        )
+                        Text("强制爬全部（忽略上次抓取时间）")
+                    }
 
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -238,25 +247,13 @@ fun WormApp() {
                         }
                     }
 
-                    Row(
+                    Button(
+                        onClick = { viewModel.start() },
+                        enabled = !ui.running,
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Button(
-                            onClick = { viewModel.start() },
-                            enabled = !ui.running,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            if (!ui.running) Icon(Icons.Default.PlayArrow, contentDescription = null)
-                            Text(if (ui.running) "抓取中…" else "增量抓取")
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.start(force = true) },
-                            enabled = !ui.running,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("强制更新")
-                        }
+                        if (!ui.running) Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Text(if (ui.running) "抓取中…" else "开始抓取")
                     }
 
                     ui.progress?.let { progress ->

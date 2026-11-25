@@ -30,10 +30,12 @@ import com.geno1024.ai.worm.core.ResumeQueue
 import com.geno1024.ai.worm.core.ResumeRunner
 import com.geno1024.ai.worm.core.pageCapOf
 import com.geno1024.ai.worm.core.sinceOf
+import com.geno1024.ai.worm.core.qzone.normalizeUin
 import com.geno1024.ai.worm.core.qzone.requireQzoneAuth
 import com.geno1024.ai.worm.qzone.album.AlbumCrawler
 import com.geno1024.ai.worm.qzone.shuoshuo.ShuoshuoCrawler
 import com.geno1024.ai.worm.zhihu.ZhihuCrawler
+import com.geno1024.ai.worm.zhihu.normalizeZhihuSubject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,6 +65,7 @@ data class UiState(
     val resume: String? = null,
     val error: String? = null,
     val lastRun: String? = null,
+    val forceAll: Boolean = false,
 ) {
     val cookies: Map<String, String>
         get() = when (source.site) {
@@ -153,9 +156,18 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** The journal key follows the crawler's own normalisation, not the user's spelling. */
+    private fun journalSubject(source: Source, raw: String): String = when (source) {
+        Source.QZONE, Source.QZONE_ALBUM -> normalizeUin(raw).takeIf { it != "0" } ?: ""
+        Source.ZHIHU -> normalizeZhihuSubject(raw)
+    }
+
     private fun refreshLastRun() {
         val current = _state.value
-        val stamp = journal.lastSuccess(crawlerIdFor(current.source), current.subject.trim())
+        val stamp = journal.lastSuccess(
+            crawlerIdFor(current.source),
+            journalSubject(current.source, current.subject),
+        )
         _state.update {
             it.copy(lastRun = stamp?.let { s -> "上次成功抓取：${formatTime(s.lastSuccessAt)}" })
         }
@@ -171,10 +183,29 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
             .format(LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneId.systemDefault()))
 
+    /** Switching source is a fresh page: no stale target, filter, result or progress. */
     fun selectSource(source: Source) {
-        _state.update { it.copy(source = source, result = null, error = null) }
+        if (_state.value.running) return
+        _state.update {
+            it.copy(
+                source = source,
+                subject = "",
+                pageLimit = "10",
+                albumFilter = "",
+                running = false,
+                progress = null,
+                warnings = emptyList(),
+                result = null,
+                resume = null,
+                error = null,
+                lastRun = null,
+                forceAll = false,
+            )
+        }
         refreshLastRun()
     }
+
+    fun setForceAll(value: Boolean) = _state.update { it.copy(forceAll = value) }
 
     fun updateSubject(value: String) {
         _state.update { it.copy(subject = value) }
@@ -213,8 +244,8 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** [force] ignores the saved watermark and replays every page (existing files are still skipped). */
-    fun start(force: Boolean = false) {
+    /** The "force all" checkbox ignores the saved watermark and replays every page. */
+    fun start() {
         if (_state.value.running) return
         viewModelScope.launch(Dispatchers.IO) {
             _state.update {
@@ -227,7 +258,8 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
                 val crawler = crawlerFor(current, http, File(app.cacheDir, "downloads"))
                 val displayName = crawler.displayName
                 val subject = current.subject.trim()
-                val stamp = if (force) null else journal.lastSuccess(crawler.id, subject)
+                val keySubject = journalSubject(current.source, subject)
+                val stamp = if (current.forceAll) null else journal.lastSuccess(crawler.id, keySubject)
                 val since = sinceOf(stamp)
                 val liveWarnings = Collections.synchronizedList(mutableListOf<String>())
                 val listener = appListener(crawler.id, subject, liveWarnings)
@@ -238,7 +270,7 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
                     listener,
                 )
                 journal.record(
-                    CrawlStamp(crawler.id, subject, System.currentTimeMillis() / 1000, report.newestItemAt),
+                    CrawlStamp(crawler.id, keySubject, System.currentTimeMillis() / 1000, report.newestItemAt),
                 )
                 refreshLastRun()
                 queue.clear()
