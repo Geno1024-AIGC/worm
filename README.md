@@ -86,8 +86,10 @@ Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复�
    Cookie 由 `CookieManager` 采集，退出登录页即刷新界面上的登录态。知乎的 `z_c0` 常在扫码后的
    页面内异步写入、不会再触发导航回调，所以登录页除了 WebView 回调外还每秒轮询一次 Cookie，
    识别到登录态后自动返回。知乎的移动端页面会把登录入口换成「打开 App」、链接全部指向 `zhihu://`，
-   因此登录页对知乎改用桌面 UA 并直接打开 `/signin`，同时在 WebView 内拦掉 `zhihu://` / `intent://`
-   等非网页 scheme，避免跳到未安装的 App 后卡在没有任何登录控件的页面上。
+   所以在 WebView 内拦掉 `zhihu://` / `intent://` 等非网页 scheme，避免跳到未安装的 App 后卡死。
+   知乎还会对 WebView / 桌面 UA 下发空白页，网页登录并不可靠：登录页右上角提供「手动输入」，
+   从任意已登录的浏览器复制完整 Cookie 请求头粘贴进来即可（按 `Domain=.zhihu.com` /
+   `.qq.com` 写回 `CookieManager`），保存后立即识别登录态并返回。
 2. 填目标（QQ 号或知乎 `url_token` / 主页 URL），并设「页数上限」：默认 10 页，`0` 表示抓到没有更多
    为止（上限 1000 页）。相册源另有「相册名过滤」，留空抓所有可访问相册。Qzone 接口会返回
    `total` / `albumsInUser` / `totalInAlbum`，列表阶段据此显示总页数；知乎只给 `next`，没有总数。

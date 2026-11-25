@@ -13,14 +13,19 @@ import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,10 +39,6 @@ import androidx.compose.ui.unit.dp
 import com.geno1024.ai.worm.android.site.Site
 import com.geno1024.ai.worm.android.site.SiteCookies
 import com.geno1024.ai.worm.android.ui.theme.WormTheme
-
-private const val DESKTOP_UA =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
-        "Chrome/131.0.0.0 Safari/537.36"
 
 /** A tiny WebView whose only job is to produce cookies for the shared crawlers. */
 class LoginActivity : ComponentActivity() {
@@ -66,6 +67,7 @@ class LoginActivity : ComponentActivity() {
                     onBack = { finish() },
                     onWebView = { webView = it },
                     onCheck = ::checkLogin,
+                    onCookie = ::applyCookieHeader,
                 )
             }
         }
@@ -92,6 +94,38 @@ class LoginActivity : ComponentActivity() {
         return true
     }
 
+    /**
+     * WebView login is unreliable on Zhihu (app deep links / blank desktop page), so the
+     * user can paste a Cookie header copied from a browser where login worked. `null`
+     * means the cookies were accepted and the activity will return to the caller.
+     */
+    private fun applyCookieHeader(header: String): String? {
+        val url = when (site) {
+            Site.QQ -> "https://user.qzone.qq.com/"
+            Site.ZHIHU -> "https://www.zhihu.com/"
+        }
+        val domain = when (site) {
+            Site.QQ -> ".qq.com"
+            Site.ZHIHU -> ".zhihu.com"
+        }
+        val manager = CookieManager.getInstance()
+        var count = 0
+        for (part in header.split(';')) {
+            val entry = part.trim()
+            val separator = entry.indexOf('=')
+            if (separator <= 0) continue
+            val name = entry.substring(0, separator).trim()
+            val value = entry.substring(separator + 1).trim()
+            if (name.isEmpty() || value.isEmpty()) continue
+            manager.setCookie(url, "$name=$value; Domain=$domain; Path=/")
+            count++
+        }
+        manager.flush()
+        if (count == 0) return "没有识别到 Cookie，请粘贴完整的 Cookie 请求头"
+        if (!checkLogin()) return "未识别到登录态：${site.label} 需要有效的登录 Cookie"
+        return null
+    }
+
     companion object {
         const val EXTRA_SITE = "site"
         private const val POLL_MS = 1000L
@@ -106,9 +140,12 @@ private fun LoginScreen(
     onBack: () -> Unit,
     onWebView: (WebView) -> Unit,
     onCheck: () -> Boolean,
+    onCookie: (String) -> String?,
 ) {
     var progress by remember { mutableIntStateOf(0) }
     var status by remember { mutableStateOf("正在加载登录页，完成后会自动返回…") }
+    var showCookie by remember { mutableStateOf(false) }
+    var cookieText by remember { mutableStateOf("") }
     val seen = remember { mutableStateOf(false) }
 
     Scaffold(
@@ -119,6 +156,9 @@ private fun LoginScreen(
                     Button(onClick = onBack, modifier = Modifier.padding(start = 8.dp)) {
                         Text("返回")
                     }
+                },
+                actions = {
+                    TextButton(onClick = { showCookie = true }) { Text("手动输入") }
                 },
             )
         },
@@ -138,9 +178,47 @@ private fun LoginScreen(
                 )
             }
             Surface(modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)) {
-                Text(status, modifier = Modifier.padding(8.dp))
+                Column {
+                    Text(status, modifier = Modifier.padding(8.dp))
+                    Text(
+                        "网页登录不可用时，可在浏览器登录后点右上角「手动输入」粘贴 Cookie。",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                    )
+                }
             }
         }
+    }
+
+    if (showCookie) {
+        AlertDialog(
+            onDismissRequest = { showCookie = false },
+            title = { Text("粘贴 ${site.label} Cookie") },
+            text = {
+                Column {
+                    Text(
+                        "在浏览器里登录 ${site.label}，复制完整的 Cookie 请求头后粘贴到这里。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedTextField(
+                        value = cookieText,
+                        onValueChange = { cookieText = it },
+                        label = { Text("Cookie") },
+                        minLines = 3,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val error = onCookie(cookieText)
+                    if (error == null) showCookie = false else status = error
+                }) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCookie = false }) { Text("取消") }
+            },
+        )
     }
 }
 
@@ -157,12 +235,6 @@ private fun AndroidWebView(
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
-                if (site == Site.ZHIHU) {
-                    // Zhihu's mobile page replaces the login form with "open in app"
-                    // links that all point at zhihu://. A desktop UA gets the real web
-                    // login (QR code / phone number) instead.
-                    settings.userAgentString = DESKTOP_UA
-                }
                 CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
@@ -173,8 +245,8 @@ private fun AndroidWebView(
                 }
                 webViewClient = object : WebViewClient() {
                     // Zhihu pushes the native app via zhihu:// and intent:// deep links;
-                    // with no app installed these just strand the WebView on a page with
-                    // no login form. Keep only web schemes inside the WebView.
+                    // with no app installed these strand the WebView on a page with no
+                    // login form. Keep only web schemes inside the WebView.
                     override fun shouldOverrideUrlLoading(
                         view: WebView?,
                         request: WebResourceRequest?,
@@ -197,9 +269,7 @@ private fun AndroidWebView(
                 loadUrl(
                     when (site) {
                         Site.QQ -> "https://user.qzone.qq.com/"
-                        // Land straight on the sign-in page; the desktop home page
-                        // hides its login entry behind an app download banner.
-                        Site.ZHIHU -> "https://www.zhihu.com/signin"
+                        Site.ZHIHU -> "https://www.zhihu.com/"
                     },
                 )
                 onReady(this)
