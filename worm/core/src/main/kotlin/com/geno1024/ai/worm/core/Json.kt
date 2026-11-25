@@ -26,14 +26,16 @@ object Jsonp {
  * surfaces as a cryptic "illegal character at 24" from the JSON parser.
  */
 fun responseProblem(body: String): String {
-    val head = body.trim().removePrefix("\uFEFF").take(160).lowercase()
+    val head = body.trim().removePrefix("\uFEFF").take(160)
+    val snippet = head.take(120).replace('\n', ' ').replace('\r', ' ')
+    val lower = head.lowercase()
     return when {
         head.isEmpty() -> "响应为空（可能触发登录或风控）"
-        head.startsWith("<svg") || head.startsWith("<?xml") ->
-            "收到 SVG 页面，通常是验证码或风控拦截，请重新登录或稍后再试"
-        head.startsWith("<!doctype html") || head.startsWith("<html") ->
-            "收到 HTML 页面，通常是登录跳转或风控拦截，请重新登录"
-        else -> "响应不是合法 JSON（${head.take(40)}）"
+        lower.startsWith("<svg") || lower.startsWith("<?xml") ->
+            "收到 SVG 页面（$snippet），通常是验证码或风控拦截，请重新登录或稍后再试"
+        lower.startsWith("<!doctype html") || lower.startsWith("<html") ->
+            "收到 HTML 页面（$snippet），通常是登录跳转或风控拦截，请重新登录"
+        else -> "响应不是合法 JSON（${snippet.take(40)}）"
     }
 }
 

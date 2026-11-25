@@ -45,7 +45,9 @@ class CoreTest {
 
     @Test
     fun `responseProblem names svg html and empty bodies`() {
-        assertTrue(responseProblem("""<svg xmlns="http://www.w3.org/2000/svg" width="100">""").contains("SVG"))
+        val svgProblem = responseProblem("""<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40">""")
+        assertTrue(svgProblem.contains("SVG"))
+        assertTrue(svgProblem.contains("width=\"100\" height=\"40\""))
         assertTrue(responseProblem("""<?xml version="1.0"?><svg/>""").contains("SVG"))
         assertTrue(responseProblem("""<!doctype html><html>login</html>""").contains("HTML"))
         assertTrue(responseProblem("  ").contains("响应为空"))
