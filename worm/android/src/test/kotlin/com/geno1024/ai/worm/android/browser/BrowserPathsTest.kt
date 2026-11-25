@@ -17,6 +17,19 @@ class BrowserPathsTest {
     }
 
     @Test
+    fun `directory sort uses newest media time`() {
+        val sorted = sortDirectoriesByTime(
+            listOf(
+                DirectoryEntry("old", 1000L),
+                DirectoryEntry("unknown", null),
+                DirectoryEntry("new", 3000L),
+                DirectoryEntry("mid", 2000L),
+            ),
+        )
+        assertEquals(listOf("new", "mid", "old", "unknown"), sorted.map { it.name })
+    }
+
+    @Test
     fun `media sort newest first and keep unknown times last`() {
         val sorted = sortMediaByTime(
             listOf(

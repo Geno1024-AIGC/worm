@@ -123,8 +123,8 @@ fun BrowserScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(current.directories, key = { "dir:$it" }) { name ->
-                        DirectoryTile(name) { folder = childFolder(folder, name) }
+                    items(current.directories, key = { "dir:${it.name}" }) { entry ->
+                        DirectoryTile(entry) { folder = childFolder(folder, entry.name) }
                     }
                     items(current.media, key = { it.id }) { media ->
                         MediaTile(media) {
@@ -143,7 +143,7 @@ fun BrowserScreen(
 }
 
 @Composable
-private fun DirectoryTile(name: String, onClick: () -> Unit) {
+private fun DirectoryTile(entry: DirectoryEntry, onClick: () -> Unit) {
     Card(modifier = Modifier.clickable(onClick = onClick)) {
         Column(
             Modifier
@@ -152,7 +152,13 @@ private fun DirectoryTile(name: String, onClick: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Text(name, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(entry.name, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                "最新：${formatMediaTime(entry.newestAt)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
         }
     }
 }

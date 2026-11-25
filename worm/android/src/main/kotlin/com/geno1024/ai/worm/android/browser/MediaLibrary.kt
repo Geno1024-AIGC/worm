@@ -46,9 +46,21 @@ fun sortMediaByTime(media: List<LocalMedia>): List<LocalMedia> =
             .thenBy { it.name },
     )
 
+/** Folders with newer media first; folders without any timed media go last. */
+fun sortDirectoriesByTime(directories: List<DirectoryEntry>): List<DirectoryEntry> =
+    directories.sortedWith(
+        compareByDescending<DirectoryEntry> { it.newestAt ?: Long.MIN_VALUE }
+            .thenBy { it.name },
+    )
+
+data class DirectoryEntry(
+    val name: String,
+    val newestAt: Long? = null,
+)
+
 data class DirectoryListing(
     val path: String,
-    val directories: List<String> = emptyList(),
+    val directories: List<DirectoryEntry> = emptyList(),
     val media: List<LocalMedia> = emptyList(),
     val error: String? = null,
 )
@@ -77,7 +89,11 @@ class MediaLibrary(
         val files = current.listFiles()
         return DirectoryListing(
             path = folder,
-            directories = files.filter { it.isDirectory() }.mapNotNull { it.name }.sorted(),
+            directories = sortDirectoriesByTime(
+                files.filter { it.isDirectory() }.mapNotNull { dir ->
+                    dir.name?.let { DirectoryEntry(it, newestAtSaf(dir)) }
+                },
+            ),
             media = files.filter { it.isFile() }.mapNotNull { document ->
                 val name = document.name ?: return@mapNotNull null
                 val kind = MediaFiles.kindOf(name) ?: return@mapNotNull null
@@ -99,7 +115,11 @@ class MediaLibrary(
         val files = current.listFiles() ?: return DirectoryListing(folder, error = "目录不存在：$folder")
         return DirectoryListing(
             path = folder,
-            directories = files.filter { it.isDirectory() }.map { it.name }.sorted(),
+            directories = sortDirectoriesByTime(
+                files.filter { it.isDirectory() }.map { dir ->
+                    DirectoryEntry(dir.name, newestAtPrivate(dir))
+                },
+            ),
             media = files.filter { it.isFile() }.mapNotNull { file ->
                 val kind = MediaFiles.kindOf(file.name) ?: return@mapNotNull null
                 LocalMedia(
@@ -112,4 +132,18 @@ class MediaLibrary(
             }.let(::sortMediaByTime),
         )
     }
+
+    /** Newest mtime anywhere under a SAF folder; unreadable providers simply have no time. */
+    private fun newestAtSaf(dir: DocumentFile): Long? = runCatching {
+        val children = dir.listFiles()
+        val direct = children.filter { it.isFile() }.mapNotNull { it.lastModified().takeIf { t -> t > 0 } }
+        val nested = children.filter { it.isDirectory() }.mapNotNull(::newestAtSaf)
+        (direct + nested).maxOrNull()
+    }.getOrNull()
+
+    private fun newestAtPrivate(dir: File): Long? = runCatching {
+        dir.walkTopDown().filter { it.isFile() }
+            .mapNotNull { it.lastModified().takeIf { t -> t > 0 } }
+            .maxOrNull()
+    }.getOrNull()
 }
