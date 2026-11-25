@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import com.geno1024.ai.worm.core.DirectoryMediaSink
 import com.geno1024.ai.worm.core.MediaFiles
@@ -103,7 +104,7 @@ class SafMediaSink(
 fun createMediaSink(context: Context, treeUri: String?): MediaSink {
     if (!treeUri.isNullOrBlank()) {
         try {
-            return SafMediaSink(context, Uri.parse(treeUri))
+            return SafMediaSink(context, treeUri.toUri())
         } catch (_: Exception) {
             // Permission may have been revoked; fall back instead of failing the run.
         }

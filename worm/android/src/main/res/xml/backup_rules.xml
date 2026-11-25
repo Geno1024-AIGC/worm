@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Pre-Android 12 cloud backup must not copy WebView cookies or media. -->
+    <exclude domain="root" path="." />
+</full-backup-content>

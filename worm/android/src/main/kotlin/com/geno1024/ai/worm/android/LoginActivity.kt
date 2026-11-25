@@ -223,6 +223,7 @@ private fun LoginScreen(
 }
 
 @Composable
+@SuppressLint("SetJavaScriptEnabled")
 private fun AndroidWebView(
     site: Site,
     onProgress: (Int) -> Unit,

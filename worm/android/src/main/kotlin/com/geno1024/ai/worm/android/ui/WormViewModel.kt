@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
@@ -169,7 +170,7 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, flags) }
         }
         val value = uri?.toString()
-        prefs.edit().putString(KEY_STORAGE, value).apply()
+        prefs.edit { putString(KEY_STORAGE, value) }
         sink = createMediaSink(context.applicationContext, value)
         _state.update {
             it.copy(
