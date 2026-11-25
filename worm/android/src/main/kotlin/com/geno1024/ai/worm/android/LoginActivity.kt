@@ -3,6 +3,8 @@ package com.geno1024.ai.worm.android
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -20,7 +22,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -36,10 +37,22 @@ import com.geno1024.ai.worm.android.ui.theme.WormTheme
 /** A tiny WebView whose only job is to produce cookies for the shared crawlers. */
 class LoginActivity : ComponentActivity() {
     private var webView: WebView? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var captured = false
+    private lateinit var site: Site
+
+    // Zhihu sets z_c0 asynchronously (QR login, SPA redirects), often with no further
+    // navigation event for the WebView callbacks. Poll as well, or login is never noticed.
+    private val poll = object : Runnable {
+        override fun run() {
+            checkLogin()
+            handler.postDelayed(this, POLL_MS)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val site = runCatching { Site.valueOf(intent.getStringExtra(EXTRA_SITE).orEmpty()) }
+        site = runCatching { Site.valueOf(intent.getStringExtra(EXTRA_SITE).orEmpty()) }
             .getOrDefault(Site.QQ)
         setContent {
             WormTheme {
@@ -47,18 +60,36 @@ class LoginActivity : ComponentActivity() {
                     site = site,
                     onBack = { finish() },
                     onWebView = { webView = it },
+                    onCheck = ::checkLogin,
                 )
             }
         }
+        handler.postDelayed(poll, POLL_MS)
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(poll)
         webView?.destroy()
         super.onDestroy()
     }
 
+    /** True when login cookies were found (only the first call finishes the activity). */
+    private fun checkLogin(): Boolean {
+        if (captured) return true
+        val cookies = SiteCookies.read(site)
+        if (!SiteCookies.hasLogin(site, cookies)) return false
+        captured = true
+        SiteCookies.flush()
+        handler.postDelayed({
+            setResult(Activity.RESULT_OK)
+            finish()
+        }, 600)
+        return true
+    }
+
     companion object {
         const val EXTRA_SITE = "site"
+        private const val POLL_MS = 1000L
     }
 }
 
@@ -69,10 +100,11 @@ private fun LoginScreen(
     site: Site,
     onBack: () -> Unit,
     onWebView: (WebView) -> Unit,
+    onCheck: () -> Boolean,
 ) {
     var progress by remember { mutableIntStateOf(0) }
-    var status by remember { mutableStateOf("正在加载登录页…") }
-    val captured = remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf("正在加载登录页，完成后会自动返回…") }
+    val seen = remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -89,9 +121,9 @@ private fun LoginScreen(
         Box(Modifier.padding(padding).fillMaxSize()) {
             AndroidWebView(
                 site = site,
-                captured = captured,
                 onProgress = { progress = it },
-                onCaptured = { status = it },
+                onCheck = onCheck,
+                onCaptured = { if (!seen.value) { seen.value = true; status = it } },
                 onReady = onWebView,
             )
             if (progress in 1..99) {
@@ -110,8 +142,8 @@ private fun LoginScreen(
 @Composable
 private fun AndroidWebView(
     site: Site,
-    captured: MutableState<Boolean>,
     onProgress: (Int) -> Unit,
+    onCheck: () -> Boolean,
     onCaptured: (String) -> Unit,
     onReady: (WebView) -> Unit,
 ) {
@@ -120,7 +152,8 @@ private fun AndroidWebView(
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
-                settings.userAgentString = settings.userAgentString + " worm-android"
+                // Do not tag the browser as a crawler: Zhihu serves a restricted page
+                // to suspicious user agents, which can hide the login controls.
                 CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
@@ -138,17 +171,7 @@ private fun AndroidWebView(
                     ) = check()
 
                     private fun check() {
-                        if (captured.value) return
-                        val cookies = SiteCookies.read(site)
-                        if (!SiteCookies.hasLogin(site, cookies)) return
-                        captured.value = true
-                        onCaptured("已获取登录态，正在返回…")
-                        SiteCookies.flush()
-                        postDelayed({
-                            val activity = context as? Activity
-                            activity?.setResult(Activity.RESULT_OK)
-                            activity?.finish()
-                        }, 600)
+                        if (onCheck()) onCaptured("已获取登录态，正在返回…")
                     }
                 }
                 loadUrl(
