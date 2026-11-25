@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -21,17 +19,14 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -43,23 +38,21 @@ import com.geno1024.ai.worm.android.update.Updater
 import java.io.File
 
 /**
- * Where a newer canary is announced, fetched, and handed to the system installer.
- *
- * Three endings stay visibly apart: up to date, a version found, and a failed check.
- * The selected download source is a choice, not a hidden fallback, because whether a
- * mirror is reachable depends on the network the device is on.
+ * The update part of the settings screen: a newer canary can be announced, fetched,
+ * and handed to the system installer. Three endings stay visibly apart: up to date,
+ * a version found, and a failed check. The selected mirror is an explicit choice,
+ * because reachability depends on the network the device is on.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UpdateScreen(
-    onBack: () -> Unit,
+fun UpdateSection(
     modifier: Modifier = Modifier,
     viewModel: UpdateViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    // Coming back to this screen re-checks only if the last answer may have gone stale.
+    // Coming back to settings re-checks only if the last answer may have gone stale.
     LaunchedEffect(Unit) { viewModel.recheckIfStale() }
 
     val installLauncher = rememberLauncherForActivityResult(
@@ -88,95 +81,72 @@ fun UpdateScreen(
             }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("检查更新") },
-                navigationIcon = {
-                    TextButton(onClick = onBack, modifier = Modifier.padding(start = 8.dp)) {
-                        Text("返回")
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text("应用更新", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "已安装版本：${state.installedVersion}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
+
+                if (state.checking) {
+                    // Keep the text on its own line: a fillMaxWidth bar in a Row
+                    // squeezes the label into a narrow right-hand column.
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("正在检查版本…", style = MaterialTheme.typography.bodySmall)
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = modifier
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(
-                "已安装版本：${state.installedVersion}",
-                style = MaterialTheme.typography.bodyMedium,
-                fontFamily = FontFamily.Monospace,
-            )
+                }
 
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Text("更新状态", style = MaterialTheme.typography.titleMedium)
+                state.message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
 
-                    if (state.checking) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                            Text("正在检查版本…", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-
-                    state.message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-
-                    val release = state.available
-                    if (release != null) {
-                        Text(release.name, style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            release.version?.toString().orEmpty(),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        when {
-                            state.downloading -> {
-                                val total = state.totalBytes.takeIf { it > 0 } ?: 1L
-                                LinearProgressIndicator(
-                                    progress = { (state.downloadedBytes.toFloat() / total).coerceIn(0f, 1f) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                Text(
-                                    "下载中 ${percent(state.downloadedBytes, state.totalBytes)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            state.downloaded != null -> Button(
-                                onClick = { install(state.downloaded!!) },
+                val release = state.available
+                if (release != null) {
+                    Text(release.name, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        release.version?.toString().orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    when {
+                        state.downloading -> {
+                            val total = state.totalBytes.takeIf { it > 0 } ?: 1L
+                            Text(
+                                "下载中 ${percent(state.downloadedBytes, state.totalBytes)}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            LinearProgressIndicator(
+                                progress = { (state.downloadedBytes.toFloat() / total).coerceIn(0f, 1f) },
                                 modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        state.downloaded != null -> Button(
+                            onClick = { install(state.downloaded!!) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("安装更新")
+                        }
+                        else -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = viewModel::download,
+                                enabled = !state.checking,
+                                modifier = Modifier.weight(1f),
                             ) {
-                                Text("安装更新")
+                                Text("下载更新")
                             }
-                            else -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
-                                    onClick = viewModel::download,
-                                    enabled = !state.checking,
-                                    modifier = Modifier.weight(1f),
-                                ) {
-                                    Text("下载更新")
-                                }
-                                TextButton(onClick = viewModel::dismiss) { Text("暂不提醒") }
-                            }
+                            TextButton(onClick = viewModel::dismiss) { Text("暂不提醒") }
                         }
                     }
                 }
-            }
 
-            if (!UpdateInstaller.canInstall(context)) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!UpdateInstaller.canInstall(context)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             "安装需要允许本应用安装未知来源应用。",
                             style = MaterialTheme.typography.bodySmall,
@@ -186,17 +156,21 @@ fun UpdateScreen(
                         }
                     }
                 }
-            }
 
-            SourceDropdown(
-                source = state.source,
-                customPrefix = state.customPrefix,
-                onSelect = viewModel::setSource,
-                onCustomPrefix = viewModel::setCustomPrefix,
-            )
+                SourceDropdown(
+                    source = state.source,
+                    customPrefix = state.customPrefix,
+                    onSelect = viewModel::setSource,
+                    onCustomPrefix = viewModel::setCustomPrefix,
+                )
 
-            Button(onClick = viewModel::check, enabled = !state.checking, modifier = Modifier.fillMaxWidth()) {
-                Text(if (state.checking) "检查中…" else "检查更新")
+                Button(
+                    onClick = viewModel::check,
+                    enabled = !state.checking,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (state.checking) "检查中…" else "检查更新")
+                }
             }
         }
     }

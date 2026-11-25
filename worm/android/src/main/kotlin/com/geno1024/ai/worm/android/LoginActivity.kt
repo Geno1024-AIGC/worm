@@ -31,7 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.geno1024.ai.worm.android.site.Site
 import com.geno1024.ai.worm.android.site.SiteCookies
-import com.geno1024.ai.worm.android.ui.WormTheme
+import com.geno1024.ai.worm.android.ui.theme.WormTheme
 
 /** A tiny WebView whose only job is to produce cookies for the shared crawlers. */
 class LoginActivity : ComponentActivity() {

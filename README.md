@@ -80,6 +80,8 @@ Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复�
    SAF 目录授权会被持久化，爬虫按上面的 `qzone/<QQ号>/…`、`zhihu/<token>/…` 结构写入。
 4. 点「开始抓取」，先把列表翻完再批量下载：列表阶段显示页码，下载阶段显示「媒体 i/n」确定进度条，
    最后给出警告与保存统计。抓取跑在 `Dispatchers.IO`，不阻塞主线程。
+5. 抽屉里的「设置」集中放外观、更新和下载源：明暗模式可选「跟随系统 / 浅色 / 深色」，配色提供
+   16 套明/暗预设（移植自 opencode-inspire），选择后立即生效并写入 app-private 偏好。
 
 发现列表后队列写到 `filesDir/worm/resume-queue.json`，每完成一个媒体就更新一次。app 重启时若发现未完成
 队列，会先按队列记录的抓取源和保存目录续传（进度从已完成数继续），再允许开始新抓取；若登录态缺失或
@@ -90,7 +92,7 @@ CLI 的 `credentials.json`。首次安装需要分别登录。
 
 ### 应用内更新
 
-侧边抽屉「检查更新」进入更新页：进入时检查，30 分钟内不重复检查，也可手动点「检查更新」。
+侧边抽屉「设置」里的「应用更新」区块：进入设置时检查，30 分钟内不重复检查，也可手动点「检查更新」。
 元数据只从 `api.github.com/repos/Geno1024-AIGC/worm/releases` 读取，只认带 APK 的
 `prerelease=true` 滚动 canary；镜像只负责传 APK，绝不代理 API 响应。版本按
 `<major>.<minor>.<env>.<pack>.<sha8>` 解析（base 不写死），排序只比 `env`：相等即同一构建不提示，

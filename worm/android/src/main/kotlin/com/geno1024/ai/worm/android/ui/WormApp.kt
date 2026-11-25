@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,7 +38,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.geno1024.ai.worm.android.LoginActivity
 import com.geno1024.ai.worm.android.site.Source
-import com.geno1024.ai.worm.android.ui.update.UpdateScreen
+import com.geno1024.ai.worm.android.ui.settings.SettingsScreen
+import com.geno1024.ai.worm.android.ui.theme.ThemePrefs
+import com.geno1024.ai.worm.android.ui.theme.ThemeSettings
+import com.geno1024.ai.worm.android.ui.theme.WormTheme
 import kotlinx.coroutines.launch
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -48,143 +52,159 @@ fun WormApp() {
     val ui by viewModel.state.collectAsStateWithLifecycle()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    var showUpdates by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    val themePrefs = remember { ThemePrefs(context.applicationContext) }
+    var themeSettings by remember { mutableStateOf(themePrefs.snapshot()) }
 
-    val loginLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult(),
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) viewModel.refreshCookies()
+    fun changeTheme(settings: ThemeSettings) {
+        themePrefs.save(settings)
+        themeSettings = settings
     }
-    val storageLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocumentTree(),
-    ) { uri -> if (uri != null) viewModel.useStorage(context, uri) }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet {
-                Text(
-                    "抓取源",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp),
-                )
-                for (source in Source.entries) {
+    WormTheme(
+        darkTheme = themeSettings.mode.resolved(isSystemInDarkTheme()),
+        preset = themeSettings.preset,
+    ) {
+        val loginLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.StartActivityForResult(),
+        ) { result ->
+            if (result.resultCode == Activity.RESULT_OK) viewModel.refreshCookies()
+        }
+        val storageLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocumentTree(),
+        ) { uri -> if (uri != null) viewModel.useStorage(context, uri) }
+
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet {
+                    Text(
+                        "抓取源",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                    for (source in Source.entries) {
+                        NavigationDrawerItem(
+                            label = { Text(source.label) },
+                            selected = ui.source == source,
+                            onClick = {
+                                viewModel.selectSource(source)
+                                scope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                        )
+                    }
+                    HorizontalDivider(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                     NavigationDrawerItem(
-                        label = { Text(source.label) },
-                        selected = ui.source == source,
+                        label = { Text("设置") },
+                        selected = showSettings,
                         onClick = {
-                            viewModel.selectSource(source)
+                            showSettings = true
                             scope.launch { drawerState.close() }
                         },
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
+                    Text(
+                        "从屏幕左侧滑出可随时切换抓取源",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(16.dp),
+                    )
                 }
-                HorizontalDivider(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
-                NavigationDrawerItem(
-                    label = { Text("检查更新") },
-                    selected = showUpdates,
-                    onClick = {
-                        showUpdates = true
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-                Text(
-                    "从屏幕左侧滑出可随时切换抓取源",
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(16.dp),
-                )
-            }
-        },
-    ) {
-        if (showUpdates) {
-            UpdateScreen(onBack = { showUpdates = false })
-        } else {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Worm 媒体采集") },
-                    navigationIcon = {
-                        TextButton(
-                            onClick = { scope.launch { drawerState.open() } },
-                            modifier = Modifier.padding(start = 8.dp),
-                        ) {
-                            Text("☰")
-                        }
-                    },
-                )
             },
-        ) { padding ->
-            Column(
-                modifier = Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text("当前抓取源：${ui.source.label}", style = MaterialTheme.typography.titleMedium)
-
-                OutlinedTextField(
-                    value = ui.subject,
-                    onValueChange = viewModel::updateSubject,
-                    label = { Text(ui.source.subjectHint) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (showSettings) {
+                SettingsScreen(
+                    onBack = { showSettings = false },
+                    settings = themeSettings,
+                    onSettingsChange = ::changeTheme,
                 )
-
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("登录态：${if (ui.loginReady) "已就绪" else "未登录"}")
-                        Button(
-                            onClick = {
-                                loginLauncher.launch(
-                                    Intent(context, LoginActivity::class.java).apply {
-                                        putExtra(LoginActivity.EXTRA_SITE, ui.source.site.name)
-                                    },
-                                )
-                            },
-                        ) {
-                            Text("登录 ${ui.source.site.label}")
-                        }
-                        Text("保存到：${ui.storageLabel}", style = MaterialTheme.typography.bodySmall)
-                        Button(onClick = { storageLauncher.launch(null) }) {
-                            Text("选择保存目录")
-                        }
-                    }
-                }
-
-                Button(
-                    onClick = { viewModel.start() },
-                    enabled = !ui.running,
-                    modifier = Modifier.fillMaxWidth(),
+            } else {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = { Text("Worm 媒体采集") },
+                        navigationIcon = {
+                            TextButton(
+                                onClick = { scope.launch { drawerState.open() } },
+                                modifier = Modifier.padding(start = 8.dp),
+                            ) {
+                                Text("☰")
+                            }
+                        },
+                    )
+                },
+            ) { padding ->
+                Column(
+                    modifier = Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text(if (ui.running) "抓取中…" else "开始抓取")
-                }
+                    Text("当前抓取源：${ui.source.label}", style = MaterialTheme.typography.titleMedium)
 
-                ui.progress?.let { progress ->
-                    val total = progress.total?.takeIf { it > 0 }
-                    Text("${progress.stage} ${progress.current}${total?.let { "/$it" } ?: ""} ${progress.detail}")
-                    if (total != null) {
-                        LinearProgressIndicator(
-                            progress = { (progress.current.toFloat() / total).coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } else {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
-                }
-                ui.resume?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                ui.result?.let { Text(it) }
-                ui.error?.let { Text("错误：$it", color = MaterialTheme.colorScheme.error) }
-                if (ui.warnings.isNotEmpty()) {
+                    OutlinedTextField(
+                        value = ui.subject,
+                        onValueChange = viewModel::updateSubject,
+                        label = { Text(ui.source.subjectHint) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
                     Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text("警告", style = MaterialTheme.typography.titleSmall)
-                            for (warning in ui.warnings) {
-                                Text("· $warning", style = MaterialTheme.typography.bodySmall)
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("登录态：${if (ui.loginReady) "已就绪" else "未登录"}")
+                            Button(
+                                onClick = {
+                                    loginLauncher.launch(
+                                        Intent(context, LoginActivity::class.java).apply {
+                                            putExtra(LoginActivity.EXTRA_SITE, ui.source.site.name)
+                                        },
+                                    )
+                                },
+                            ) {
+                                Text("登录 ${ui.source.site.label}")
+                            }
+                            Text("保存到：${ui.storageLabel}", style = MaterialTheme.typography.bodySmall)
+                            Button(onClick = { storageLauncher.launch(null) }) {
+                                Text("选择保存目录")
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = { viewModel.start() },
+                        enabled = !ui.running,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (ui.running) "抓取中…" else "开始抓取")
+                    }
+
+                    ui.progress?.let { progress ->
+                        val total = progress.total?.takeIf { it > 0 }
+                        Text("${progress.stage} ${progress.current}${total?.let { "/$it" } ?: ""} ${progress.detail}")
+                        if (total != null) {
+                            LinearProgressIndicator(
+                                progress = { (progress.current.toFloat() / total).coerceIn(0f, 1f) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                    ui.resume?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    ui.result?.let { Text(it) }
+                    ui.error?.let { Text("错误：$it", color = MaterialTheme.colorScheme.error) }
+                    if (ui.warnings.isNotEmpty()) {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text("警告", style = MaterialTheme.typography.titleSmall)
+                                for (warning in ui.warnings) {
+                                    Text("· $warning", style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                     }
                 }
             }
-        }
+            }
         }
     }
 }
