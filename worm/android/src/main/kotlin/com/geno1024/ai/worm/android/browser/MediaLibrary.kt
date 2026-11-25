@@ -6,6 +6,7 @@ import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import com.geno1024.ai.worm.core.MediaFiles
 import com.geno1024.ai.worm.core.MediaKind
+import com.geno1024.ai.worm.core.MediaTimeManifest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -72,6 +73,7 @@ data class DirectoryListing(
 class MediaLibrary(
     private val context: Context,
     private val treeUri: String?,
+    private val mediaTimes: MediaTimeManifest = MediaTimeManifest(File(context.filesDir, "worm/media-times.json")),
 ) {
     suspend fun list(folder: String): DirectoryListing = withContext(Dispatchers.IO) {
         val safeFolder = folder.split('/').filter { it.isNotBlank() }.joinToString("/")
@@ -91,18 +93,19 @@ class MediaLibrary(
             path = folder,
             directories = sortDirectoriesByTime(
                 files.filter { it.isDirectory() }.mapNotNull { dir ->
-                    dir.name?.let { DirectoryEntry(it, newestAtSaf(dir)) }
+                    dir.name?.let { DirectoryEntry(it, newestAtSaf(dir, childFolder(folder, it))) }
                 },
             ),
             media = files.filter { it.isFile() }.mapNotNull { document ->
                 val name = document.name ?: return@mapNotNull null
                 val kind = MediaFiles.kindOf(name) ?: return@mapNotNull null
+                val path = childFolder(folder, name)
                 LocalMedia(
-                    path = childFolder(folder, name),
+                    path = path,
                     name = name,
                     kind = kind,
                     uri = document.uri,
-                    modifiedAt = document.lastModified().takeIf { it > 0 },
+                    modifiedAt = mediaTimes.get(path) ?: document.lastModified().takeIf { it > 0 },
                 )
             }.let(::sortMediaByTime),
         )
@@ -117,33 +120,42 @@ class MediaLibrary(
             path = folder,
             directories = sortDirectoriesByTime(
                 files.filter { it.isDirectory() }.map { dir ->
-                    DirectoryEntry(dir.name, newestAtPrivate(dir))
+                    DirectoryEntry(dir.name, newestAtPrivate(root, dir, childFolder(folder, dir.name)))
                 },
             ),
             media = files.filter { it.isFile() }.mapNotNull { file ->
                 val kind = MediaFiles.kindOf(file.name) ?: return@mapNotNull null
+                val path = childFolder(folder, file.name)
                 LocalMedia(
-                    path = childFolder(folder, file.name),
+                    path = path,
                     name = file.name,
                     kind = kind,
                     file = file,
-                    modifiedAt = file.lastModified().takeIf { it > 0 },
+                    modifiedAt = mediaTimes.get(path) ?: file.lastModified().takeIf { it > 0 },
                 )
             }.let(::sortMediaByTime),
         )
     }
 
     /** Newest mtime anywhere under a SAF folder; unreadable providers simply have no time. */
-    private fun newestAtSaf(dir: DocumentFile): Long? = runCatching {
+    private fun newestAtSaf(dir: DocumentFile, prefix: String): Long? = runCatching {
         val children = dir.listFiles()
-        val direct = children.filter { it.isFile() }.mapNotNull { it.lastModified().takeIf { t -> t > 0 } }
-        val nested = children.filter { it.isDirectory() }.mapNotNull(::newestAtSaf)
+        val direct = children.filter { it.isFile() }.mapNotNull { document ->
+            val name = document.name ?: return@mapNotNull null
+            mediaTimes.get(childFolder(prefix, name)) ?: document.lastModified().takeIf { it > 0 }
+        }
+        val nested = children.filter { it.isDirectory() }.mapNotNull { child ->
+            child.name?.let { name -> newestAtSaf(child, childFolder(prefix, name)) }
+        }
         (direct + nested).maxOrNull()
     }.getOrNull()
 
-    private fun newestAtPrivate(dir: File): Long? = runCatching {
+    private fun newestAtPrivate(root: File, dir: File, prefix: String): Long? = runCatching {
         dir.walkTopDown().filter { it.isFile() }
-            .mapNotNull { it.lastModified().takeIf { t -> t > 0 } }
+            .mapNotNull { file ->
+                mediaTimes.get(childFolder(prefix, file.toRelativeString(root)))
+                    ?: file.lastModified().takeIf { it > 0 }
+            }
             .maxOrNull()
     }.getOrNull()
 }

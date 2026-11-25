@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.geno1024.ai.worm.android.site.Site
 import com.geno1024.ai.worm.android.site.SiteCookies
 import com.geno1024.ai.worm.android.site.Source
+import com.geno1024.ai.worm.android.storage.ManifestMediaSink
 import com.geno1024.ai.worm.android.storage.SafMediaSink
 import com.geno1024.ai.worm.android.storage.createMediaSink
 import com.geno1024.ai.worm.core.CrawlJournal
@@ -27,6 +28,7 @@ import com.geno1024.ai.worm.core.HttpPortal
 import com.geno1024.ai.worm.core.JdkHttpPortal
 import com.geno1024.ai.worm.core.MediaAsset
 import com.geno1024.ai.worm.core.MediaSink
+import com.geno1024.ai.worm.core.MediaTimeManifest
 import com.geno1024.ai.worm.core.ResumeQueue
 import com.geno1024.ai.worm.core.ResumeRunner
 import com.geno1024.ai.worm.core.SEEN_ID_LIMIT
@@ -82,7 +84,8 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
     private val storedTreeUri = prefs.getString(KEY_STORAGE, null)
     private val _state = MutableStateFlow(UiState(storageUri = storedTreeUri))
     val state: StateFlow<UiState> = _state.asStateFlow()
-    private var sink: MediaSink = createMediaSink(app, storedTreeUri)
+    private val mediaTimes = MediaTimeManifest(File(app.filesDir, "worm/media-times.json"))
+    private var sink: MediaSink = createMediaSink(app, storedTreeUri, mediaTimes)
     private val queue = ResumeQueue(File(app.filesDir, "worm/resume-queue.json"))
     private val journal = CrawlJournal(File(app.filesDir, "worm/crawl-journal.json"))
 
@@ -231,7 +234,7 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         }
         val value = uri?.toString()
         prefs.edit { putString(KEY_STORAGE, value) }
-        sink = createMediaSink(context.applicationContext, value)
+        sink = createMediaSink(context.applicationContext, value, mediaTimes)
         _state.update {
             it.copy(
                 storageLabel = uri?.let { DocumentFile.fromTreeUri(context, it)?.name }?.takeIf { name ->
@@ -344,7 +347,7 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     /** Rebuilds the exact sink the interrupted run used; a revoked SAF grant is not silently redirected. */
-    private fun sinkFor(ref: ResumeQueue.SinkRef): MediaSink = when (ref.kind) {
+    private fun sinkFor(ref: ResumeQueue.SinkRef): MediaSink = ManifestMediaSink(when (ref.kind) {
         ResumeQueue.SinkRef.DIRECTORY -> DirectoryMediaSink(File(ref.root))
         ResumeQueue.SinkRef.SAF -> {
             val uri = runCatching { ref.root.toUri() }.getOrNull()
@@ -356,7 +359,7 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
             SafMediaSink(app, uri)
         }
         else -> throw IllegalStateException("未知的续传目标：${ref.kind}")
-    }
+    }, mediaTimes)
 
     private fun sourceFor(crawlerId: String): Source? = when (crawlerId) {
         "qzone", "qzone.shuoshuo" -> Source.QZONE // old queues keep working

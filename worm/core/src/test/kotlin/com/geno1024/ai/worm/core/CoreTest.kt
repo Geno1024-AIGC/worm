@@ -201,6 +201,18 @@ class CoreTest {
     }
 
     @Test
+    fun `media time manifest survives reload and forgets stale times`(@TempDir temp: File) {
+        val manifest = MediaTimeManifest(File(temp, "state/media-times.json"))
+        manifest.record("qzone/123/a.jpg", 1_700_000_000L)
+        manifest.record("qzone/123/b.jpg", null)
+        val reloaded = MediaTimeManifest(File(temp, "state/media-times.json"))
+        assertEquals(1_700_000_000L, reloaded.get("/qzone/123/a.jpg"))
+        assertNull(reloaded.get("qzone/123/b.jpg"))
+        reloaded.record("qzone/123/a.jpg", null)
+        assertNull(reloaded.get("qzone/123/a.jpg"))
+    }
+
+    @Test
     fun `fallback url is used when the primary download fails`(@TempDir temp: File) {
         val primary = "https://example.com/thumb_r.jpg"
         val fallback = "https://example.com/thumb_720w.jpg"

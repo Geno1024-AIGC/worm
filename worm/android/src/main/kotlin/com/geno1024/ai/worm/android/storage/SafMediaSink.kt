@@ -10,6 +10,7 @@ import com.geno1024.ai.worm.core.DirectoryMediaSink
 import com.geno1024.ai.worm.core.MediaFiles
 import com.geno1024.ai.worm.core.MediaSink
 import com.geno1024.ai.worm.core.MediaAsset
+import com.geno1024.ai.worm.core.MediaTimeManifest
 import com.geno1024.ai.worm.core.SavedMedia
 import java.io.File
 
@@ -101,13 +102,20 @@ class SafMediaSink(
 }
 
 /** A SAF tree when the user picked one, otherwise app-private storage. */
-fun createMediaSink(context: Context, treeUri: String?): MediaSink {
-    if (!treeUri.isNullOrBlank()) {
+fun createMediaSink(
+    context: Context,
+    treeUri: String?,
+    manifest: MediaTimeManifest? = null,
+): MediaSink {
+    val sink = if (!treeUri.isNullOrBlank()) {
         try {
-            return SafMediaSink(context, treeUri.toUri())
+            SafMediaSink(context, treeUri.toUri())
         } catch (_: Exception) {
             // Permission may have been revoked; fall back instead of failing the run.
+            DirectoryMediaSink(File(context.applicationContext.filesDir, "worm-media"))
         }
+    } else {
+        DirectoryMediaSink(File(context.applicationContext.filesDir, "worm-media"))
     }
-    return DirectoryMediaSink(File(context.applicationContext.filesDir, "worm-media"))
+    return if (manifest != null) ManifestMediaSink(sink, manifest) else sink
 }
