@@ -263,6 +263,7 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
                 val seenIds = if (current.forceAll) emptySet() else stamp?.seenIds?.toSet().orEmpty()
                 val liveWarnings = Collections.synchronizedList(mutableListOf<String>())
                 val listener = appListener(crawler.id, subject, liveWarnings)
+                queue.clear()
                 val report = crawler.collect(
                     CrawlRequest(subject, since = since, seenIds = seenIds),
                     session,
@@ -302,12 +303,21 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         subject: String,
         warnings: MutableList<String>,
     ): CrawlListener = object : CrawlListener {
+        val pending = mutableListOf<MediaAsset>()
         override fun onProgress(progress: CrawlProgress) {
             _state.update { it.copy(progress = progress) }
         }
 
         override fun onWarning(message: String) {
             warnings.add(message)
+        }
+
+        override fun onAssetFound(asset: MediaAsset) {
+            pending += asset
+            // Checkpoint every 20 discoveries: a crash mid-listing keeps a usable tail.
+            if (pending.size % 20 == 0) {
+                queue.save(ResumeQueue.Batch(crawlerId, subject, sinkRef(), pending.size, pending.toList()))
+            }
         }
 
         override fun onDiscovered(assets: List<MediaAsset>) {

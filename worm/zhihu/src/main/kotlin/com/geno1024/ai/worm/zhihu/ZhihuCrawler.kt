@@ -95,9 +95,10 @@ class ZhihuCrawler(
                     }
                     for (item in candidates) {
                         if (item.identity() in request.seenIds) continue
-                        if (item is CollectedItem.Media &&
-                            !seen.add("${item.asset.kind.name}:${item.asset.url}")
-                        ) continue
+                        if (item is CollectedItem.Media) {
+                            if (!seen.add("${item.asset.kind.name}:${item.asset.url}")) continue
+                            listener.onAssetFound(item.asset)
+                        }
                         items += item
                     }
                 }

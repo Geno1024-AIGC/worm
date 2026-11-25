@@ -155,7 +155,10 @@ class AlbumCrawler(
                     for (asset in extractAlbumPhotoMedia(photo, relativeDir)) {
                         val item = CollectedItem.Media(asset)
                         if (item.identity() in request.seenIds) continue
-                        if (seen.add("${asset.kind.name}:${asset.url}")) items += item
+                        if (seen.add("${asset.kind.name}:${asset.url}")) {
+                            listener.onAssetFound(asset)
+                            items += item
+                        }
                     }
                 }
 

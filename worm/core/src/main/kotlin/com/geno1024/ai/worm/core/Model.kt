@@ -102,6 +102,9 @@ interface CrawlListener {
     fun onProgress(progress: CrawlProgress) {}
     fun onWarning(message: String) {}
 
+    /** One asset was found during listing; safe to checkpoint before the whole batch is known. */
+    fun onAssetFound(asset: MediaAsset) {}
+
     /** The complete discovered list, before any bytes are downloaded. Checkpoint here. */
     fun onDiscovered(assets: List<MediaAsset>) {}
 

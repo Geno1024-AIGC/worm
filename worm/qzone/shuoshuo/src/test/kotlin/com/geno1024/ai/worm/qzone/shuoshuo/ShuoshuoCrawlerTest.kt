@@ -99,10 +99,14 @@ class ShuoshuoCrawlerTest {
         val http = PagedHttp(first, second)
         val events = mutableListOf<CrawlProgress>()
         val discovered = mutableListOf<MediaAsset>()
+        val found = mutableListOf<MediaAsset>()
         val done = mutableListOf<MediaAsset>()
         val listener = object : CrawlListener {
             override fun onProgress(progress: CrawlProgress) {
                 events += progress
+            }
+            override fun onAssetFound(asset: MediaAsset) {
+                found += asset
             }
             override fun onDiscovered(assets: List<MediaAsset>) {
                 discovered += assets
@@ -128,6 +132,7 @@ class ShuoshuoCrawlerTest {
         assertTrue(mediaSteps.all { it.total == 21 })
         assertTrue(events.indexOf(listSteps.last()) < events.indexOf(mediaSteps.first()))
         assertEquals(21, discovered.size)
+        assertEquals(21, found.size)
         assertEquals(21, done.size)
         assertTrue(discovered.all { it.relativeDir == "qzone/12345" })
     }
