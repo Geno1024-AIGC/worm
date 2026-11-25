@@ -10,6 +10,7 @@ import com.geno1024.ai.worm.core.optLongOf
 import com.geno1024.ai.worm.core.optObjectOf
 import com.geno1024.ai.worm.core.optStringOf
 import com.geno1024.ai.worm.core.objects
+import com.geno1024.ai.worm.core.responseProblem
 import org.json.JSONObject
 import java.net.URI
 
@@ -59,8 +60,8 @@ private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "m4v", "webm", "flv")
 
 /** Pure parse of a zhihu-api list response. Errors are surfaced, never silently treated as "no data". */
 fun parseZhihuListPage(body: String, kind: ZhihuKind, referer: String, offset: Int = 0): ZhihuListPage {
-    val root = runCatching { Jsonp.objectOf(body) }.getOrNull()
-        ?: return ZhihuListPage(emptyList(), null, "响应不是合法 JSON")
+    val root = Jsonp.objectOrNull(body)
+        ?: return ZhihuListPage(emptyList(), null, responseProblem(body))
     val error = root.optStringOf("error", "message")?.takeIf { root.opt("data") == null && root.optInt("code") != 0 }
     if (error != null) return ZhihuListPage(emptyList(), null, error)
 

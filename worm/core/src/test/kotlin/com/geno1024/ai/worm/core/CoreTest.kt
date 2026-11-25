@@ -37,6 +37,22 @@ class CoreTest {
     }
 
     @Test
+    fun `jsonp objectOrNull never leaks a raw parser exception`() {
+        assertNull(Jsonp.objectOrNull("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"))
+        assertNull(Jsonp.objectOrNull(""))
+        assertEquals(0, Jsonp.objectOrNull("{\"code\":0}")?.optInt("code"))
+    }
+
+    @Test
+    fun `responseProblem names svg html and empty bodies`() {
+        assertTrue(responseProblem("""<svg xmlns="http://www.w3.org/2000/svg" width="100">""").contains("SVG"))
+        assertTrue(responseProblem("""<?xml version="1.0"?><svg/>""").contains("SVG"))
+        assertTrue(responseProblem("""<!doctype html><html>login</html>""").contains("HTML"))
+        assertTrue(responseProblem("  ").contains("响应为空"))
+        assertTrue(responseProblem("not-json").contains("响应不是合法 JSON"))
+    }
+
+    @Test
     fun `media names are sanitised and extensions whitelisted`() {
         val asset = MediaAsset(
             url = "https://example.com/a/photo.png?size=1",

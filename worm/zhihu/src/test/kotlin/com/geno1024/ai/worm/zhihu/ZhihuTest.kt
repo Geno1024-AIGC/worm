@@ -8,6 +8,7 @@ import com.geno1024.ai.worm.core.HttpResponse
 import com.geno1024.ai.worm.core.MediaKind
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -51,6 +52,15 @@ class ZhihuTest {
         assertEquals("示例", content.title)
         assertEquals(listOf(MediaKind.IMAGE, MediaKind.VIDEO, MediaKind.IMAGE), content.media.map { it.kind })
         assertTrue(content.media.last().isCover)
+    }
+
+    @Test
+    fun `captcha svg is reported as a readable warning`() {
+        val svg = """<svg xmlns="http://www.w3.org/2000/svg"><text>captcha</text></svg>"""
+        val page = parseZhihuListPage(svg, ZhihuKind.ANSWER, "https://www.zhihu.com/")
+        assertTrue(page.contents.isEmpty())
+        assertTrue(page.error!!.contains("SVG"))
+        assertFalse(page.error!!.contains("illegal character"))
     }
 
     @Test

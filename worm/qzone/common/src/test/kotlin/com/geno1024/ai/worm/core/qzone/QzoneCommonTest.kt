@@ -39,6 +39,30 @@ class QzoneCommonTest {
     }
 
     @Test
+    fun `captcha svg becomes a readable warning instead of a raw json error`() {
+        val svg = """<svg xmlns="http://www.w3.org/2000/svg" width="200"><text>captcha</text></svg>"""
+        val msg = parseMsgListResponse(svg)
+        assertEquals(-1, msg.code)
+        assertEquals(0, msg.messages.length())
+        assertTrue(msg.message.contains("SVG"))
+        assertFalse(msg.message.contains("illegal character"))
+
+        val albums = parseAlbumListResponse(svg)
+        assertEquals(-1, albums.code)
+        assertTrue(albums.albums.isEmpty())
+        assertTrue(albums.message.contains("SVG"))
+
+        val photos = parsePhotoListResponse(svg)
+        assertEquals(-1, photos.code)
+        assertEquals(0, photos.photos.length())
+        assertTrue(photos.message.contains("SVG"))
+
+        val html = parseMsgListResponse("""<!doctype html><html>login</html>""")
+        assertEquals(-1, html.code)
+        assertTrue(html.message.contains("HTML"))
+    }
+
+    @Test
     fun `message media handles images video repost and cover only`() {
         val json = """
             {"tid":"t1","created_time":1700000000,

@@ -2,6 +2,7 @@ package com.geno1024.ai.worm.core.qzone
 
 import com.geno1024.ai.worm.core.Jsonp
 import com.geno1024.ai.worm.core.objects
+import com.geno1024.ai.worm.core.responseProblem
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -110,7 +111,8 @@ private fun JSONObject.optMore(): Boolean? {
 
 /** Pure parser. The endpoint has three different album array shapes depending on `mode`. */
 fun parseAlbumListResponse(body: String): AlbumListResult {
-    val root = Jsonp.objectOf(body)
+    val root = Jsonp.objectOrNull(body)
+        ?: return AlbumListResult(emptyList(), -1, 0, responseProblem(body))
     val code = root.optInt("code", -1)
     val subcode = root.optInt("subcode")
     val message = root.optString("message")
@@ -144,7 +146,8 @@ fun parseAlbumListResponse(body: String): AlbumListResult {
 
 /** Pure parser; a non-zero code yields an empty page plus the error fields. */
 fun parsePhotoListResponse(body: String): PhotoListPage {
-    val root = Jsonp.objectOf(body)
+    val root = Jsonp.objectOrNull(body)
+        ?: return PhotoListPage(JSONArray(), null, -1, 0, responseProblem(body))
     val code = root.optInt("code", -1)
     val subcode = root.optInt("subcode")
     val message = root.optString("message")

@@ -15,6 +15,26 @@ object Jsonp {
     fun objectOf(body: String): JSONObject = JSONObject(strip(body))
 
     fun arrayOf(body: String): JSONArray = JSONArray(strip(body))
+
+    /** `null` when the body is not JSON/JSONP at all — never leaks org.json's raw message. */
+    fun objectOrNull(body: String): JSONObject? = runCatching { objectOf(body) }.getOrNull()
+}
+
+/**
+ * A short, user-facing reason a response is not the JSON/JSONP the endpoint should
+ * return. QQ answers captcha/risk pages as SVG or HTML with HTTP 200, which otherwise
+ * surfaces as a cryptic "illegal character at 24" from the JSON parser.
+ */
+fun responseProblem(body: String): String {
+    val head = body.trim().removePrefix("\uFEFF").take(160).lowercase()
+    return when {
+        head.isEmpty() -> "响应为空（可能触发登录或风控）"
+        head.startsWith("<svg") || head.startsWith("<?xml") ->
+            "收到 SVG 页面，通常是验证码或风控拦截，请重新登录或稍后再试"
+        head.startsWith("<!doctype html") || head.startsWith("<html") ->
+            "收到 HTML 页面，通常是登录跳转或风控拦截，请重新登录"
+        else -> "响应不是合法 JSON（${head.take(40)}）"
+    }
 }
 
 /** Tolerant accessors: these APIs rename fields across versions and embed numbers as strings. */

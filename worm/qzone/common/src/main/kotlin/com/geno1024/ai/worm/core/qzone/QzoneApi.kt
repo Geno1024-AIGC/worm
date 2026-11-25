@@ -3,6 +3,7 @@ package com.geno1024.ai.worm.core.qzone
 import com.geno1024.ai.worm.core.CrawlException
 import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.Jsonp
+import com.geno1024.ai.worm.core.responseProblem
 import com.geno1024.ai.worm.core.optArrayOf
 import org.json.JSONArray
 import org.json.JSONObject
@@ -49,7 +50,10 @@ fun isAuthError(code: Int, subcode: Int): Boolean = code == -3000 || code == -40
 
 /** Pure parse: JSONP string in, typed page out. */
 fun parseMsgListResponse(body: String): QzonePage {
-    val object_ = Jsonp.objectOf(body)
+    val object_ = Jsonp.objectOrNull(body) ?: return QzonePage(
+        code = -1, subcode = 0, message = responseProblem(body),
+        messages = JSONArray(), total = null, hasMore = false,
+    )
     val messages = object_.optArrayOf("msglist", "msgList") ?: JSONArray()
     val explicitMore = object_.opt("hasMore") ?: object_.opt("more")
     return QzonePage(

@@ -108,6 +108,12 @@ Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复�
 系统返回键与顶栏箭头走同一条回退链：抽屉 → 图片预览 → 上层文件夹 → 浏览/设置 → 主界面；
 只有停在主界面时返回才退出应用。
 
+抓取用的 HTTP UA 是普通手机/桌面 Chrome 字符串，不带 `worm` / `worm-android` 之类的脚本标记：
+QQ 和知乎一旦从 UA 认出爬虫，会用 HTTP 200 返回验证码或风控 SVG，而不是接口本来该给的 JSONP。
+所有爬虫响应解析都走 `Jsonp.objectOrNull()`：非 JSON 响应（SVG / XML / HTML / 空响应）不再抛出
+`illegal character at 24` 这类原始 `org.json` 错误，而是给出「收到 SVG 页面，通常是验证码或风控拦截，
+请重新登录或稍后再试」之类可读警告，且不会中断整次抓取。
+
 启动图标是矢量自适应图标（含单色 themed 变体），抽屉、登录、目录、抓取与设置按钮用 Material
 Icons；两者都不依赖外部图片资源。
 
