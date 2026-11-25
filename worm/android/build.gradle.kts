@@ -120,6 +120,8 @@ dependencies {
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
+    implementation(libs.compose.icons.core)
+    implementation(libs.compose.icons.extended)
     debugImplementation(libs.compose.ui.tooling)
 
     // Offline unit tests for the release parser. Android provides org.json on device;

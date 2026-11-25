@@ -11,10 +11,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
@@ -33,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -86,6 +97,7 @@ fun WormApp() {
                     for (source in Source.entries) {
                         NavigationDrawerItem(
                             label = { Text(source.label) },
+                            icon = { Icon(sourceIcon(source), contentDescription = null) },
                             selected = ui.source == source,
                             onClick = {
                                 viewModel.selectSource(source)
@@ -97,6 +109,7 @@ fun WormApp() {
                     HorizontalDivider(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                     NavigationDrawerItem(
                         label = { Text("设置") },
+                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
                         selected = showSettings,
                         onClick = {
                             showSettings = true
@@ -124,11 +137,8 @@ fun WormApp() {
                     TopAppBar(
                         title = { Text("Worm 媒体采集") },
                         navigationIcon = {
-                            TextButton(
-                                onClick = { scope.launch { drawerState.open() } },
-                                modifier = Modifier.padding(start = 8.dp),
-                            ) {
-                                Text("☰")
+                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                Icon(Icons.Default.Menu, contentDescription = "菜单")
                             }
                         },
                     )
@@ -160,10 +170,12 @@ fun WormApp() {
                                     )
                                 },
                             ) {
+                                Icon(Icons.Default.Person, contentDescription = null)
                                 Text("登录 ${ui.source.site.label}")
                             }
                             Text("保存到：${ui.storageLabel}", style = MaterialTheme.typography.bodySmall)
                             Button(onClick = { storageLauncher.launch(null) }) {
+                                Icon(Icons.Default.Folder, contentDescription = null)
                                 Text("选择保存目录")
                             }
                         }
@@ -174,6 +186,7 @@ fun WormApp() {
                         enabled = !ui.running,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
+                        if (!ui.running) Icon(Icons.Default.PlayArrow, contentDescription = null)
                         Text(if (ui.running) "抓取中…" else "开始抓取")
                     }
 
@@ -207,4 +220,10 @@ fun WormApp() {
             }
         }
     }
+}
+
+private fun sourceIcon(source: Source): ImageVector = when (source) {
+    Source.QZONE -> Icons.Default.PhotoCamera
+    Source.QZONE_ALBUM -> Icons.Default.Folder
+    Source.ZHIHU -> Icons.Default.Language
 }
