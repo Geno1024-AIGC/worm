@@ -57,8 +57,12 @@ class JdkHttpPortal(
         val body = withConnection(uri, session, referer, extraHeaders) { connection ->
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            HttpResponse(status, text, connection.url.toString(), connection.headerFields)
+            val bytes = stream?.use { it.readBytes() } ?: ByteArray(0)
+            val declared = connection.contentLengthLong.takeIf { it > 0 }
+            if (declared != null && bytes.size.toLong() != declared) {
+                throw IOException("incomplete body for $uri: ${bytes.size} != $declared")
+            }
+            HttpResponse(status, bytes.toString(Charsets.UTF_8), connection.url.toString(), connection.headerFields)
         }
         return body
     }
@@ -143,7 +147,14 @@ class JdkHttpPortal(
                     Thread.sleep(400L * attempt)
                     continue
                 }
-                return block(connection)
+                return try {
+                    block(connection)
+                } catch (e: IOException) {
+                    if (attempt >= maxRetries) throw CrawlException("network error for $uri: ${e.message}", e)
+                    attempt++
+                    Thread.sleep(400L * attempt)
+                    continue
+                }
             } finally {
                 connection.disconnect()
             }

@@ -52,6 +52,7 @@ class CoreTest {
         assertTrue(responseProblem("""<!doctype html><html>login</html>""").contains("HTML"))
         assertTrue(responseProblem("  ").contains("响应为空"))
         assertTrue(responseProblem("not-json").contains("响应不是合法 JSON"))
+        assertTrue(responseProblem("""{"paging":{"is_end":false,"totals":8""").contains("响应被截断"))
     }
 
     @Test
