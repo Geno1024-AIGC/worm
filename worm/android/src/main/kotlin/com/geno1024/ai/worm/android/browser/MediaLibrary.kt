@@ -39,6 +39,13 @@ private fun formatMediaTime(epochMillis: Long?, formatter: DateTimeFormatter): S
         formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault()))
     } ?: "时间未知"
 
+/** Newest first; files without a usable mtime go last, then keep a stable name order. */
+fun sortMediaByTime(media: List<LocalMedia>): List<LocalMedia> =
+    media.sortedWith(
+        compareByDescending<LocalMedia> { it.modifiedAt ?: Long.MIN_VALUE }
+            .thenBy { it.name },
+    )
+
 data class DirectoryListing(
     val path: String,
     val directories: List<String> = emptyList(),
@@ -81,7 +88,7 @@ class MediaLibrary(
                     uri = document.uri,
                     modifiedAt = document.lastModified().takeIf { it > 0 },
                 )
-            }.sortedBy { it.name },
+            }.let(::sortMediaByTime),
         )
     }
 
@@ -102,7 +109,7 @@ class MediaLibrary(
                     file = file,
                     modifiedAt = file.lastModified().takeIf { it > 0 },
                 )
-            }.sortedBy { it.name },
+            }.let(::sortMediaByTime),
         )
     }
 }

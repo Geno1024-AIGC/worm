@@ -207,7 +207,7 @@ private fun MediaTile(media: LocalMedia, onClick: () -> Unit) {
             modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 4.dp),
         )
         Text(
-            formatMediaTime(media.modifiedAt),
+            "时间：${formatMediaTime(media.modifiedAt)}",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
