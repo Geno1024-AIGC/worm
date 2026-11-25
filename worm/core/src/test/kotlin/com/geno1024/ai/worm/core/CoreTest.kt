@@ -107,6 +107,18 @@ class CoreTest {
     }
 
     @Test
+    fun `inline data svg placeholders are skipped without crashing`() {
+        val html = """
+            <img src="data:image/svg+xml;utf8,<svg%20xmlns=http://www.w3.org/2000/svg%20width='4624'%20height='3468'></svg>">
+            <img src="https://pic1.zhimg.com/real.jpg">
+            <video poster="data:image/svg+xml;utf8,<svg width='10' height='10'></svg>"></video>
+            <img src="http://bad host/not a url.jpg">
+        """.trimIndent()
+        val assets = HtmlMedia.extract(html, "https://www.zhihu.com/p/1")
+        assertEquals(listOf("https://pic1.zhimg.com/real.jpg"), assets.map { it.url })
+    }
+
+    @Test
     fun `batch download has a fixed total and survives one failed asset`(@TempDir temp: File) {
         val assets = (1..3).map { MediaAsset("https://example.com/$it.jpg", MediaKind.IMAGE, id = "m$it") }
         val http = object : HttpPortal {

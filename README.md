@@ -118,6 +118,10 @@ Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复�
 爬虫会明确提示「需要登录或触发风控」，不会假装抓到空结果。这类拦截需要在网页端完成验证后重试；
 单纯换 UA 解决不了，也不要把这类响应当空列表吞掉。
 
+正文 HTML 里的 `data:image/svg+xml;utf8,<svg …>` 是知乎的懒加载占位图（宽高随原图变化），不是可下载的
+媒体。`HtmlMedia` 只接受 http/https 且能被 `URI` 解析的链接，跳过 `data:` / `blob:` 等内联 scheme；
+畸形链接也不会再以 `Illegal character in opaque part at index 24` 中断整次抓取。
+
 启动图标是矢量自适应图标（含单色 themed 变体），抽屉、登录、目录、抓取与设置按钮用 Material
 Icons；两者都不依赖外部图片资源。
 
