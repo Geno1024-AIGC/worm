@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -33,6 +34,10 @@ import androidx.compose.ui.unit.dp
 import com.geno1024.ai.worm.android.site.Site
 import com.geno1024.ai.worm.android.site.SiteCookies
 import com.geno1024.ai.worm.android.ui.theme.WormTheme
+
+private const val DESKTOP_UA =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Chrome/131.0.0.0 Safari/537.36"
 
 /** A tiny WebView whose only job is to produce cookies for the shared crawlers. */
 class LoginActivity : ComponentActivity() {
@@ -152,8 +157,12 @@ private fun AndroidWebView(
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
-                // Do not tag the browser as a crawler: Zhihu serves a restricted page
-                // to suspicious user agents, which can hide the login controls.
+                if (site == Site.ZHIHU) {
+                    // Zhihu's mobile page replaces the login form with "open in app"
+                    // links that all point at zhihu://. A desktop UA gets the real web
+                    // login (QR code / phone number) instead.
+                    settings.userAgentString = DESKTOP_UA
+                }
                 CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
@@ -163,6 +172,17 @@ private fun AndroidWebView(
                     }
                 }
                 webViewClient = object : WebViewClient() {
+                    // Zhihu pushes the native app via zhihu:// and intent:// deep links;
+                    // with no app installed these just strand the WebView on a page with
+                    // no login form. Keep only web schemes inside the WebView.
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                    ): Boolean = when (request?.url?.scheme?.lowercase()) {
+                        "http", "https", "about", "data", "blob" -> false
+                        else -> true
+                    }
+
                     override fun onPageFinished(view: WebView?, url: String?) = check()
                     override fun doUpdateVisitedHistory(
                         view: WebView?,
@@ -177,7 +197,9 @@ private fun AndroidWebView(
                 loadUrl(
                     when (site) {
                         Site.QQ -> "https://user.qzone.qq.com/"
-                        Site.ZHIHU -> "https://www.zhihu.com/"
+                        // Land straight on the sign-in page; the desktop home page
+                        // hides its login entry behind an app download banner.
+                        Site.ZHIHU -> "https://www.zhihu.com/signin"
                     },
                 )
                 onReady(this)
