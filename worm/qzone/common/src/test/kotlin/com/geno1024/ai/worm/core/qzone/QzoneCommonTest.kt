@@ -83,8 +83,52 @@ class QzoneCommonTest {
         assertEquals(listOf("Hidden"), fallback.albums.map { it.name })
         assertFalse(fallback.albums.single().allowAccess)
         assertTrue(parseAlbumListResponse("""{"code":-3000}""").albums.isEmpty())
-        assertTrue(buildAlbumListUrl("123", 42).contains("hostUin=123"))
-        assertTrue(buildPhotoListUrl("123", 42, "V_abc", 0, 100).contains("topicId=V_abc"))
+    }
+
+    @Test
+    fun `album urls separate owner from logged in viewer and page the list`() {
+        val albumUrl = buildAlbumListUrl("o00123", "o99999", 42, 100, 50)
+        assertTrue(albumUrl.contains("hostUin=123"))
+        assertTrue(albumUrl.contains("uin=99999"))
+        assertTrue(albumUrl.contains("mode=3"))
+        assertTrue(albumUrl.contains("sortOrder=1"))
+        assertTrue(albumUrl.contains("pageStart=100"))
+        assertTrue(albumUrl.contains("pageNum=50"))
+        val photoUrl = buildPhotoListUrl("123", "99999", 42, "V_abc", 20, 100)
+        assertTrue(photoUrl.contains("hostUin=123"))
+        assertTrue(photoUrl.contains("uin=99999"))
+        assertTrue(photoUrl.contains("topicId=V_abc"))
+        assertTrue(photoUrl.contains("pageStart=20"))
+        assertTrue(photoUrl.contains("pageNum=100"))
+        assertTrue(photoUrl.startsWith("https://h5.qzone.qq.com/"))
+        assertTrue(isAlbumPermissionError(-4009, 0))
+        assertTrue(isAlbumPermissionError(0, -10805))
+        assertFalse(isAlbumPermissionError(-3000, 0))
+    }
+
+    @Test
+    fun `album and photo parsers expose paging hints`() {
+        val albumBody = """
+            shine0_Callback({"code":0,"data":{"albumsInUser":"120","totalInPage":2,
+              "nextPageStartModeSort":2,"albumListModeSort":[
+              {"id":"1","name":"Trip"},{"id":"2","name":"Family"}]}});
+        """.trimIndent()
+        val albumPage = parseAlbumListResponse(albumBody)
+        assertEquals(120, albumPage.albumsInUser)
+        assertEquals(2, albumPage.totalInPage)
+        assertEquals(2, albumPage.nextPageStart)
+        assertTrue(albumPage.hasMore)
+
+        val photoBody = """
+            {"code":0,"data":{"totalInAlbum":300,"totalInPage":100,"nextPageStart":100,
+              "hasMore":true,"photoList":[{"lloc":"p1","raw":"https://p.qzone.com/1.jpg"}]}};
+        """.trimIndent()
+        val photoPage = parsePhotoListResponse(photoBody)
+        assertEquals(300, photoPage.totalInAlbum)
+        assertEquals(100, photoPage.totalInPage)
+        assertEquals(100, photoPage.nextPageStart)
+        assertTrue(photoPage.hasMore)
+        assertEquals(0, parsePhotoListResponse("""{"code":-4009}""").photos.length())
     }
 
     @Test

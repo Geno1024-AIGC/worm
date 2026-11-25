@@ -42,7 +42,8 @@ java -jar worm/qzone/shuoshuo/build/libs/*-all.jar --uin 123456 --out build/qzon
 ```
 
 - 说说：`--uin` / 位置参数指定目标 QQ（留空则抓登录账号），`--pages`、`--all`、`--delay`、`--out`。
-- 相册：`--uin`、`--album` 过滤相册名/ID，`--pages`（每相册）、`--delay`、`--out`。
+- 相册：`--uin`、`--album` 过滤相册名/ID，`--pages`（每相册）、`--delay`、`--out`。登录 Cookie 必须带
+  `uin`/`p_uin`，因为相册接口要用登录者 UIN 而不是目标 UIN。
 - 知乎：`zhihu <主页URL或url_token>`，可加 `--answers` / `--articles` / `--activities` 限定内容类型。
 
 抓取分两阶段：先翻完列表并记下全部媒体，再批量下载；下载阶段进度为确定的 `i/n`。
@@ -68,6 +69,11 @@ java -jar worm/qzone/shuoshuo/build/libs/*-all.jar --uin 123456 --out build/qzon
 Qzone 需要 `p_skey` 或 `skey`。知乎 CLI 可不带 Cookie 运行，但接口通常返回 401/403，此时警告会写进
 `report.json` 与标准输出；当前不实现 `x-zse-96` 签名。解析失败、登录失效、下载失败都不会被静默当成
 「没有内容」。
+
+Qzone 相册接口的 `hostUin` 是相册主人（抓取目标），`uin` 必须是登录者自己；两者写成同一个值会让
+非本人相册一直返回非零 code。相册列表用 `mode=3` 加 `pageStart/pageNum` 翻页（否则只给最近的相册），
+照片列表按 `totalInPage`/`nextPageStart` 翻页并带 `Referer`/`Origin`。`-3000`/`-4002` 才是登录态失效，
+`-4009`/`-10805` 只表示没有权限访问该空间或相册，会作为警告而不是「登录有问题」上报。
 
 ## Android app
 
