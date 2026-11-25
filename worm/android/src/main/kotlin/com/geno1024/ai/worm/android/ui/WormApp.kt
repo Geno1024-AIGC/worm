@@ -2,6 +2,7 @@ package com.geno1024.ai.worm.android.ui
 
 import android.app.Activity
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -87,6 +88,14 @@ fun WormApp() {
         val storageLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.OpenDocumentTree(),
         ) { uri -> if (uri != null) viewModel.useStorage(context, uri) }
+
+        // System back follows the same chain as the top-bar arrow: the drawer closes
+        // first, then settings/browser return to the main screen. Only back on the
+        // main screen is allowed to finish the activity.
+        BackHandler(enabled = (showSettings || showBrowser) && !drawerState.isOpen) {
+            showSettings = false
+            showBrowser = false
+        }
 
         ModalNavigationDrawer(
             drawerState = drawerState,

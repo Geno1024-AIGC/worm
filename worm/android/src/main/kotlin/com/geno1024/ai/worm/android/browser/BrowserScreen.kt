@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -68,6 +69,13 @@ fun BrowserScreen(
     var folder by remember { mutableStateOf("") }
     var listing by remember { mutableStateOf<DirectoryListing?>(null) }
     var preview by remember { mutableStateOf<LocalMedia?>(null) }
+
+    // Nested back: close the image preview, then climb folders, before the parent
+    // handler is allowed to leave the browser for the main screen.
+    BackHandler(enabled = preview != null || folder.isNotEmpty()) {
+        if (preview != null) preview = null
+        else folder = parentFolder(folder).orEmpty()
+    }
 
     LaunchedEffect(library, folder) {
         listing = null
