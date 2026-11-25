@@ -114,7 +114,10 @@ class ShuoshuoCrawler(
                 }
             }
 
-            if (reachedWatermark(pageTimes, since)) break
+            if (reachedWatermark(pageTimes, since)) {
+                warnings += "增量抓取在第 ${page + 1} 页命中上次抓取时间，提前结束（接口显示共 ${pages ?: "?"} 页）"
+                break
+            }
             if (!parsed.hasMore) break
             if (messages.size < PAGE_SIZE) break
             val total = parsed.total

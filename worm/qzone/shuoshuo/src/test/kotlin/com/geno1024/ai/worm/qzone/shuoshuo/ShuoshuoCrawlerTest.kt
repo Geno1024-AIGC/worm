@@ -133,6 +133,29 @@ class ShuoshuoCrawlerTest {
     }
 
     @Test
+    fun `incremental crawl stops at the watermark and explains the early stop`(@TempDir temp: File) = runBlocking {
+        val since = 1_700_000_000L
+        val freshPage = (1..20).joinToString(",") { i ->
+            """{"tid":"f$i","created_time":${since + i},"pic":[{"url":"https://p.qzone.com/f$i.jpg"}]}"""
+        }
+        val oldPage = (1..20).joinToString(",") { i ->
+            """{"tid":"o$i","created_time":${since - i},"pic":[{"url":"https://p.qzone.com/o$i.jpg"}]}"""
+        }
+        val first = """_preloadCallback({"code":0,"subcode":0,"total":100,"hasMore":true,"msglist":[$freshPage]});"""
+        val second = """_preloadCallback({"code":0,"subcode":0,"total":100,"hasMore":true,"msglist":[$oldPage]});"""
+        val http = PagedHttp(first, second)
+        val crawler = ShuoshuoCrawler(http, File(temp, "cache"), downloadDelayMs = 0)
+        val report = crawler.collect(
+            CrawlRequest("12345", since = since), session, DirectoryMediaSink(File(temp, "media")),
+        )
+
+        assertEquals(2, http.calls)
+        assertEquals(20, report.items.size)
+        assertTrue(report.warnings.single().contains("第 2 页"))
+        assertTrue(report.warnings.single().contains("共 5 页"))
+    }
+
+    @Test
     fun `auth error becomes a warning instead of a silent empty result`(@TempDir temp: File) = runBlocking {
         val http = FakeHttp("""_preloadCallback({"code":-3000,"subcode":0,"message":"login expired"});""")
         val crawler = ShuoshuoCrawler(http, File(temp, "cache"), downloadDelayMs = 0)
