@@ -85,8 +85,7 @@ fun extractMessageMedia(message: JSONObject): List<MediaAsset> {
 }
 
 /** Album photos often expose only a cover JPG in `url`; never store it as an mp4. */
-fun extractAlbumPhotoMedia(photo: JSONObject, albumName: String): List<MediaAsset> {
-    val relativeDir = "albums/" + MediaFiles.sanitize(albumName)
+fun extractAlbumPhotoMedia(photo: JSONObject, relativeDir: String): List<MediaAsset> {
     val id = photo.optStringOf("lloc", "sloc", "id")
     val time = photo.optLongOf("uploadtime", "uploadTime", "rawshoottime", "shotTime")
     val videoUrl = pickVideoUrl(photo, requireExtension = true)

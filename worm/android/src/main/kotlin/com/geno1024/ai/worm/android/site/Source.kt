@@ -6,7 +6,7 @@ enum class Source(
     val site: Site,
     val subjectHint: String,
 ) {
-    QZONE_SHUOSHUO("QQ空间说说", Site.QQ, "QQ 号（留空用登录账号）"),
-    QZONE_ALBUM("QQ空间相册", Site.QQ, "QQ 号（留空用登录账号）"),
+    QZONE("qzone", Site.QQ, "QQ 号（留空用登录账号）"),
+    QZONE_ALBUM("qzone/album", Site.QQ, "QQ 号（留空用登录账号）"),
     ZHIHU("知乎用户", Site.ZHIHU, "知乎 url_token 或主页 URL"),
 }

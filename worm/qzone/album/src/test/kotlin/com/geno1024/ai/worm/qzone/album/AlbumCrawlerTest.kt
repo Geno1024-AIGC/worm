@@ -48,7 +48,7 @@ class AlbumCrawlerTest {
     fun `crawls accessible albums with owner and viewer separated`(@TempDir temp: File) = runBlocking {
         val albumBody = """
             {"code":0,"data":{"albumListModeSort":[
-              {"id":"V_1","name":"Trip","total":2},
+              {"id":"V_1","name":"旅行","total":2},
               {"id":"V_2","name":"Private","allowAccess":0,"total":9}
             ]}};
         """.trimIndent()
@@ -75,8 +75,9 @@ class AlbumCrawlerTest {
         val kinds = report.items.map { (it as CollectedItem.Media).asset.kind }
         assertEquals(listOf(MediaKind.IMAGE, MediaKind.VIDEO, MediaKind.IMAGE), kinds)
         assertTrue(report.items[2].let { it as CollectedItem.Media }.asset.isCover)
-        assertTrue(File(temp, "media/qzone/12345/album/p1.jpg").isFile)
-        assertTrue(File(temp, "media/qzone/12345/album/p2.mp4").isFile)
+        assertEquals("qzone/album", report.crawlerId)
+        assertTrue(File(temp, "media/qzone/12345/旅行/p1.jpg").isFile)
+        assertTrue(File(temp, "media/qzone/12345/旅行/p2.mp4").isFile)
     }
 
     @Test
@@ -119,8 +120,8 @@ class AlbumCrawlerTest {
             listOf("0", "1", "0"),
             http.urls.filter { "cgi_list_photo" in it }.map { param(it, "pageStart") },
         )
-        assertTrue(File(temp, "media/qzone/12345/album/a2.jpg").isFile)
-        assertTrue(File(temp, "media/qzone/12345/album/b1.jpg").isFile)
+        assertTrue(File(temp, "media/qzone/12345/A/a2.jpg").isFile)
+        assertTrue(File(temp, "media/qzone/12345/B/b1.jpg").isFile)
     }
 
     @Test

@@ -44,10 +44,23 @@ class CoreTest {
             suggestedName = "../../evil name",
         )
         assertEquals("evil_name.png", MediaFiles.nameFor(asset))
+        assertEquals("旅行_2024", MediaFiles.sanitize("旅行/2024"))
         val video = MediaAsset("https://example.com/v.mp4", MediaKind.VIDEO)
         assertEquals("mp4", MediaFiles.extensionOf(video.url, MediaKind.VIDEO))
         val cover = MediaAsset("https://example.com/c.jpg", MediaKind.IMAGE, isCover = true)
         assertEquals("jpg", MediaFiles.extensionOf(cover.url, MediaKind.IMAGE))
+
+        // The kind wins over a misleading URL or a stale asset.extension.
+        val imageAsVideo = MediaAsset(
+            "https://example.com/photo.mp4", MediaKind.IMAGE, id = "p",
+            extension = "mp4",
+        )
+        val videoAsImage = MediaAsset(
+            "https://example.com/clip.jpg", MediaKind.VIDEO, id = "p",
+            extension = "jpg",
+        )
+        assertEquals("p.jpg", MediaFiles.nameFor(imageAsVideo))
+        assertEquals("p.mp4", MediaFiles.nameFor(videoAsImage))
     }
 
     @Test
@@ -118,13 +131,13 @@ class CoreTest {
         )
         queue.save(
             ResumeQueue.Batch(
-                "qzone.shuoshuo", "123",
+                "qzone", "123",
                 ResumeQueue.SinkRef(ResumeQueue.SinkRef.DIRECTORY, "media"),
                 total = 5, assets = assets,
             ),
         )
         val loaded = queue.load()!!
-        assertEquals("qzone.shuoshuo", loaded.crawlerId)
+        assertEquals("qzone", loaded.crawlerId)
         assertEquals("123", loaded.subject)
         assertEquals(5, loaded.total)
         assertEquals(assets, loaded.assets)
@@ -151,7 +164,7 @@ class CoreTest {
         val queue = ResumeQueue(File(temp, "resume-queue.json"))
         queue.save(
             ResumeQueue.Batch(
-                "qzone.shuoshuo", "123",
+                "qzone", "123",
                 ResumeQueue.SinkRef(ResumeQueue.SinkRef.DIRECTORY, "media"),
                 total = 5, assets = pending,
             ),

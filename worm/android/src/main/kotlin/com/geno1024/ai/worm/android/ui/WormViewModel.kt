@@ -39,7 +39,7 @@ import java.io.File
 import java.util.Collections
 
 data class UiState(
-    val source: Source = Source.QZONE_SHUOSHUO,
+    val source: Source = Source.QZONE,
     val subject: String = "",
     val qqCookies: Map<String, String> = emptyMap(),
     val zhihuCookies: Map<String, String> = emptyMap(),
@@ -262,8 +262,8 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     private fun sourceFor(crawlerId: String): Source? = when (crawlerId) {
-        "qzone.shuoshuo" -> Source.QZONE_SHUOSHUO
-        "qzone.album" -> Source.QZONE_ALBUM
+        "qzone", "qzone.shuoshuo" -> Source.QZONE // old queues keep working
+        "qzone/album", "qzone.album" -> Source.QZONE_ALBUM
         "zhihu.user" -> Source.ZHIHU
         else -> null
     }
@@ -291,7 +291,7 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
 
     private fun crawlerFor(source: Source, http: HttpPortal, cacheDir: File): Crawler =
         when (source) {
-            Source.QZONE_SHUOSHUO -> ShuoshuoCrawler(http, cacheDir)
+            Source.QZONE -> ShuoshuoCrawler(http, cacheDir)
             Source.QZONE_ALBUM -> AlbumCrawler(http, cacheDir)
             Source.ZHIHU -> ZhihuCrawler(http, cacheDir)
         }

@@ -11,8 +11,8 @@ JVM CLI 与 Android app 使用同一份实现。第一阶段只落盘图片与�
 | --- | --- |
 | `:worm:core` | 爬虫接口、数据模型、HTTP/存储抽象（JVM + Android 共用） |
 | `:worm:qzone:common` | Qzone 共享登录态、gtk、JSONP 与媒体解析（库） |
-| `:worm:qzone:shuoshuo` | QQ 空间说说 |
-| `:worm:qzone:album` | QQ 空间相册 |
+| `:worm:qzone:shuoshuo` | QQ 空间说说（抓取源 `qzone`） |
+| `:worm:qzone:album` | QQ 空间相册（抓取源 `qzone/album`） |
 | `:worm:zhihu` | 知乎用户回答 / 文章 / 动态 |
 | `:worm:android` | Jetpack Compose Android app |
 
@@ -21,13 +21,14 @@ JVM CLI 与 Android app 使用同一份实现。第一阶段只落盘图片与�
 
 ```
 <输出目录>/media/
-  qzone/<QQ号>/image/<图片>.jpg        # 说说图片
-  qzone/<QQ号>/video/<视频>.mp4        # 说说视频
-  qzone/<QQ号>/album/<文件>.jpg        # 相册图片/视频同放（文件名已含照片 ID）
-  zhihu/<url_token>/image/<图片>.jpg  # 知乎图片
-  zhihu/<url_token>/video/<视频>.mp4  # 知乎视频
+  qzone/<QQ号>/<图片>.jpg              # qzone 图片
+  qzone/<QQ号>/<视频>.mp4              # qzone 视频，与图片同目录，按扩展名区分
+  qzone/<QQ号>/<相册名>/<文件>.jpg      # qzone/album，每个相册一个子目录
+  zhihu/<url_token>/image/<图片>.jpg   # 知乎图片
+  zhihu/<url_token>/video/<视频>.mp4   # 知乎视频
 ```
 
+图片与视频的扩展名按媒体类型白名单决定，URL 里的误导性后缀不会把封面 JPG 存成 MP4。
 视频只有拿到真实播放地址才存为视频；只有封面时按图片保存并标记 `isCover`。
 所有下载先写 `.part` 再原子改名，避免把半截文件当成品。
 
@@ -79,7 +80,7 @@ Qzone 相册接口的 `hostUin` 是相册主人（抓取目标），`uin` 必须
 
 Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复用，没有第二条解析实现。
 
-1. 选择抓取源（说说 / 相册 / 知乎用户），点「登录 QQ / 知乎」在 WebView 里登录；
+1. 选择抓取源（`qzone` / `qzone/album` / 知乎用户），点「登录 QQ / 知乎」在 WebView 里登录；
    Cookie 由 `CookieManager` 采集，退出登录页即刷新界面上的登录态。
 2. 填目标（QQ 号或知乎 `url_token` / 主页 URL）。范围由分页上限决定，不再有「最多收集条数」旋钮。
 3. 可选「选择保存目录」用 SAF 授权一个目录；未选择时写到应用私有目录 `filesDir/worm-media`。

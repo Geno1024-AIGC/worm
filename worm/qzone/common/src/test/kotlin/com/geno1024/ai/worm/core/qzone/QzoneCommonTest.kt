@@ -148,15 +148,17 @@ class QzoneCommonTest {
     @Test
     fun `album photo never stores a cover as mp4`() {
         val covered = org.json.JSONObject("""{"raw":"https://p.qzone.com/cover.jpg","is_video":1}""")
-        val assets = extractAlbumPhotoMedia(covered, "My Album")
+        val assets = extractAlbumPhotoMedia(covered, "qzone/123/My_Album")
         assertEquals(1, assets.size)
         assertEquals(MediaKind.IMAGE, assets[0].kind)
         assertTrue(assets[0].isCover)
-        assertEquals("albums/My_Album", assets[0].relativeDir)
+        assertEquals("qzone/123/My_Album", assets[0].relativeDir)
+        assertEquals("jpg", assets[0].extension)
 
         val playable = org.json.JSONObject("""{"raw":"https://v.qzone.com/a.mp4","url":"https://p.qzone.com/c.jpg"}""")
-        val video = extractAlbumPhotoMedia(playable, "Trip")
+        val video = extractAlbumPhotoMedia(playable, "qzone/123/Trip")
         assertEquals(MediaKind.VIDEO, video.single().kind)
-        assertEquals("albums/Trip", video.single().relativeDir)
+        assertEquals("mp4", video.single().extension)
+        assertEquals("qzone/123/Trip", video.single().relativeDir)
     }
 }

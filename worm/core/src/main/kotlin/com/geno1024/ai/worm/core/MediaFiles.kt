@@ -9,24 +9,31 @@ private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp",
 private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "m4v", "avi", "mkv", "flv", "webm")
 
 object MediaFiles {
+    private fun allowed(kind: MediaKind): Set<String> =
+        if (kind == MediaKind.VIDEO) VIDEO_EXTENSIONS else IMAGE_EXTENSIONS
+
+    /** An image never gets a video extension (or vice versa), whatever the URL claims. */
     fun extensionOf(url: String, kind: MediaKind): String {
         val raw = runCatching { URI.create(url).path.substringAfterLast('.', "") }.getOrDefault("")
         val candidate = raw.lowercase().substringBefore('?').substringBefore('#')
-        val allowed = if (kind == MediaKind.VIDEO) VIDEO_EXTENSIONS else IMAGE_EXTENSIONS
-        return if (candidate in allowed) candidate else if (kind == MediaKind.VIDEO) "mp4" else "jpg"
+        return if (candidate in allowed(kind)) candidate else if (kind == MediaKind.VIDEO) "mp4" else "jpg"
     }
 
     /** Keeps only safe path components; a hostile URL can never escape the sink root. */
     fun sanitize(value: String): String =
         value.trim().replace('\\', '_').replace('/', '_').replace("..", "_")
-            .replace(Regex("[^A-Za-z0-9._-]"), "_")
+            // Unicode letters are safe in a filename and Chinese album names must survive.
+            .replace(Regex("[^\\p{L}\\p{N}._-]"), "_")
             .trim('_').take(80).ifEmpty { "media" }
 
     fun nameFor(asset: MediaAsset): String {
         val base = asset.suggestedName?.let(::sanitize)
             ?: asset.id?.let(::sanitize)
             ?: "media-${asset.url.hashCode().toUInt().toString(16)}"
-        return "$base.${asset.extension ?: extensionOf(asset.url, asset.kind)}"
+        // A stale/mislabelled asset extension must not turn a cover JPG into a video.
+        val extension = asset.extension?.lowercase()?.takeIf { it in allowed(asset.kind) }
+            ?: extensionOf(asset.url, asset.kind)
+        return "$base.$extension"
     }
 
     fun copyFinished(part: File, target: File) {

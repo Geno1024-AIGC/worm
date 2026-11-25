@@ -75,6 +75,7 @@ class ShuoshuoCrawlerTest {
         val crawler = ShuoshuoCrawler(http, File(temp, "cache"), downloadDelayMs = 0)
         val report = crawler.collect(CrawlRequest("12345"), session, DirectoryMediaSink(File(temp, "media")))
 
+        assertEquals("qzone", report.crawlerId)
         assertEquals("12345", report.subject)
         assertEquals(2, report.items.size)
         assertEquals(2, report.saved.size)
@@ -84,8 +85,8 @@ class ShuoshuoCrawlerTest {
         assertEquals(MediaKind.VIDEO, (report.items[1] as com.geno1024.ai.worm.core.CollectedItem.Media).asset.kind)
         assertEquals("t1-1.jpg", report.saved[0].name)
         assertEquals("t2-1.mp4", report.saved[1].name)
-        assertTrue(File(temp, "media/qzone/12345/image/t1-1.jpg").isFile)
-        assertTrue(File(temp, "media/qzone/12345/video/t2-1.mp4").isFile)
+        assertTrue(File(temp, "media/qzone/12345/t1-1.jpg").isFile)
+        assertTrue(File(temp, "media/qzone/12345/t2-1.mp4").isFile)
     }
 
     @Test
@@ -126,7 +127,7 @@ class ShuoshuoCrawlerTest {
         assertTrue(events.indexOf(listSteps.last()) < events.indexOf(mediaSteps.first()))
         assertEquals(21, discovered.size)
         assertEquals(21, done.size)
-        assertTrue(discovered.all { it.relativeDir.startsWith("qzone/12345/") })
+        assertTrue(discovered.all { it.relativeDir == "qzone/12345" })
     }
 
     @Test

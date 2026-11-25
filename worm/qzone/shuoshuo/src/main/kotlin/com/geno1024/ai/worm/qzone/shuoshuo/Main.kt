@@ -21,7 +21,7 @@ import kotlinx.coroutines.runBlocking
 import java.io.File
 
 private val USAGE = """
-    用法: shuoshuo [选项] [QQ号]
+    用法: qzone [选项] [QQ号]
 
       --uin UIN            目标 QQ 号；留空则抓当前登录账号
       --cookie HEADER      直接传 Cookie 头（需含 p_skey 或 skey）

@@ -21,7 +21,7 @@ import kotlinx.coroutines.runBlocking
 import java.io.File
 
 private val USAGE = """
-    用法: album [选项] [QQ号]
+    用法: qzone/album [选项] [QQ号]
 
       --uin UIN            目标 QQ 号；留空则抓当前登录账号
       --album NAME         只抓名称/ID 匹配的相册（子串，忽略大小写）
