@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.geno1024.ai.worm.android.LoginActivity
+import com.geno1024.ai.worm.android.browser.BrowserScreen
 import com.geno1024.ai.worm.android.site.Source
 import com.geno1024.ai.worm.android.ui.settings.SettingsScreen
 import com.geno1024.ai.worm.android.ui.theme.ThemePrefs
@@ -64,6 +66,7 @@ fun WormApp() {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var showSettings by remember { mutableStateOf(false) }
+    var showBrowser by remember { mutableStateOf(false) }
     val themePrefs = remember { ThemePrefs(context.applicationContext) }
     var themeSettings by remember { mutableStateOf(themePrefs.snapshot()) }
 
@@ -101,6 +104,8 @@ fun WormApp() {
                             selected = ui.source == source,
                             onClick = {
                                 viewModel.selectSource(source)
+                                showBrowser = false
+                                showSettings = false
                                 scope.launch { drawerState.close() }
                             },
                             modifier = Modifier.padding(horizontal = 12.dp),
@@ -108,10 +113,22 @@ fun WormApp() {
                     }
                     HorizontalDivider(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                     NavigationDrawerItem(
+                        label = { Text("浏览") },
+                        icon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null) },
+                        selected = showBrowser,
+                        onClick = {
+                            showSettings = false
+                            showBrowser = true
+                            scope.launch { drawerState.close() }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                    )
+                    NavigationDrawerItem(
                         label = { Text("设置") },
                         icon = { Icon(Icons.Default.Settings, contentDescription = null) },
                         selected = showSettings,
                         onClick = {
+                            showBrowser = false
                             showSettings = true
                             scope.launch { drawerState.close() }
                         },
@@ -130,6 +147,11 @@ fun WormApp() {
                     onBack = { showSettings = false },
                     settings = themeSettings,
                     onSettingsChange = ::changeTheme,
+                )
+            } else if (showBrowser) {
+                BrowserScreen(
+                    treeUri = ui.storageUri,
+                    onBack = { showBrowser = false },
                 )
             } else {
             Scaffold(

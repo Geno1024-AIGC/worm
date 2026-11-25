@@ -61,6 +61,12 @@ class CoreTest {
         )
         assertEquals("p.jpg", MediaFiles.nameFor(imageAsVideo))
         assertEquals("p.mp4", MediaFiles.nameFor(videoAsImage))
+
+        assertEquals(MediaKind.IMAGE, MediaFiles.kindOf("旅行.JPG"))
+        assertEquals(MediaKind.VIDEO, MediaFiles.kindOf("clip.webm"))
+        assertNull(MediaFiles.kindOf("clip.part"))
+        assertEquals("image/jpeg", MediaFiles.mimeOf("a.jpg"))
+        assertEquals("video/mp4", MediaFiles.mimeOf("a.mp4"))
     }
 
     @Test

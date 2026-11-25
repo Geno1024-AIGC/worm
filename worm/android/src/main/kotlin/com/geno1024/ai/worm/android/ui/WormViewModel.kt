@@ -44,6 +44,7 @@ data class UiState(
     val qqCookies: Map<String, String> = emptyMap(),
     val zhihuCookies: Map<String, String> = emptyMap(),
     val storageLabel: String = "应用私有目录",
+    val storageUri: String? = null,
     val running: Boolean = false,
     val progress: CrawlProgress? = null,
     val warnings: List<String> = emptyList(),
@@ -62,9 +63,10 @@ data class UiState(
 
 class WormViewModel(private val app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("worm", Context.MODE_PRIVATE)
-    private val _state = MutableStateFlow(UiState())
+    private val storedTreeUri = prefs.getString(KEY_STORAGE, null)
+    private val _state = MutableStateFlow(UiState(storageUri = storedTreeUri))
     val state: StateFlow<UiState> = _state.asStateFlow()
-    private var sink: MediaSink = createMediaSink(app, prefs.getString(KEY_STORAGE, null))
+    private var sink: MediaSink = createMediaSink(app, storedTreeUri)
     private val queue = ResumeQueue(File(app.filesDir, "worm/resume-queue.json"))
 
     init {
@@ -163,6 +165,7 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
                 storageLabel = uri?.let { DocumentFile.fromTreeUri(context, it)?.name }?.takeIf { name ->
                     name.isNotBlank()
                 } ?: "应用私有目录",
+                storageUri = value,
                 error = null,
             )
         }

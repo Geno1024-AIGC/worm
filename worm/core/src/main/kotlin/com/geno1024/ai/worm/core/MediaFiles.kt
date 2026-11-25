@@ -12,6 +12,31 @@ object MediaFiles {
     private fun allowed(kind: MediaKind): Set<String> =
         if (kind == MediaKind.VIDEO) VIDEO_EXTENSIONS else IMAGE_EXTENSIONS
 
+    /** Classify a saved filename; unknown or partial files are not media. */
+    fun kindOf(name: String): MediaKind? = when (name.substringAfterLast('.', "").lowercase()) {
+        in IMAGE_EXTENSIONS -> MediaKind.IMAGE
+        in VIDEO_EXTENSIONS -> MediaKind.VIDEO
+        else -> null
+    }
+
+    fun mimeOf(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
+        "jpg", "jpeg" -> "image/jpeg"
+        "png" -> "image/png"
+        "gif" -> "image/gif"
+        "webp" -> "image/webp"
+        "bmp" -> "image/bmp"
+        "heic" -> "image/heic"
+        "heif" -> "image/heif"
+        "mp4" -> "video/mp4"
+        "mov" -> "video/quicktime"
+        "m4v" -> "video/x-m4v"
+        "avi" -> "video/x-msvideo"
+        "mkv" -> "video/x-matroska"
+        "flv" -> "video/x-flv"
+        "webm" -> "video/webm"
+        else -> "application/octet-stream"
+    }
+
     /** An image never gets a video extension (or vice versa), whatever the URL claims. */
     fun extensionOf(url: String, kind: MediaKind): String {
         val raw = runCatching { URI.create(url).path.substringAfterLast('.', "") }.getOrDefault("")

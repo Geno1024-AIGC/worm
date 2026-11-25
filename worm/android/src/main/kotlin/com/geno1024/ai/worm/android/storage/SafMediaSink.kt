@@ -52,7 +52,7 @@ class SafMediaSink(
         val existed = previous != null && previous.length() > 0
         val partName = "$name.part"
         dir.findFile(partName)?.delete()
-        val part = dir.createFile(mimeFor(name), partName)
+        val part = dir.createFile(MediaFiles.mimeOf(name), partName)
             ?: error("cannot create $partName in the chosen directory")
         try {
             resolver.openOutputStream(part.uri, "w")?.use { output ->
@@ -62,7 +62,7 @@ class SafMediaSink(
             previous?.delete()
             if (!part.renameTo(name)) {
                 // Some providers refuse rename; copy into the final name instead.
-                val final = dir.createFile(mimeFor(name), name)
+                val final = dir.createFile(MediaFiles.mimeOf(name), name)
                     ?: error("cannot create $name in the chosen directory")
                 resolver.openOutputStream(final.uri, "w")?.use { output ->
                     resolver.openInputStream(part.uri)?.use { it.copyTo(output) }
@@ -91,23 +91,6 @@ class SafMediaSink(
         }
     }
 
-    private fun mimeFor(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
-        "jpg", "jpeg" -> "image/jpeg"
-        "png" -> "image/png"
-        "gif" -> "image/gif"
-        "webp" -> "image/webp"
-        "bmp" -> "image/bmp"
-        "heic" -> "image/heic"
-        "heif" -> "image/heif"
-        "mp4" -> "video/mp4"
-        "mov" -> "video/quicktime"
-        "m4v" -> "video/x-m4v"
-        "avi" -> "video/x-msvideo"
-        "mkv" -> "video/x-matroska"
-        "flv" -> "video/x-flv"
-        "webm" -> "video/webm"
-        else -> "application/octet-stream"
-    }
 }
 
 /** A SAF tree when the user picked one, otherwise app-private storage. */
