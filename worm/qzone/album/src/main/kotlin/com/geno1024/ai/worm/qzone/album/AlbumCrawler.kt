@@ -153,7 +153,9 @@ class AlbumCrawler(
                     time?.let { if (it > newestAt) newestAt = it }
                     if (isBeforeWatermark(time, since)) continue
                     for (asset in extractAlbumPhotoMedia(photo, relativeDir)) {
-                        if (seen.add("${asset.kind.name}:${asset.url}")) items += CollectedItem.Media(asset)
+                        val item = CollectedItem.Media(asset)
+                        if (item.identity() in request.seenIds) continue
+                        if (seen.add("${asset.kind.name}:${asset.url}")) items += item
                     }
                 }
 

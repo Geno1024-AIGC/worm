@@ -32,6 +32,9 @@ sealed interface CollectedItem {
     val title: String?
     val createdAt: Long?
 
+    /** Stable identity used by incremental crawls to avoid replaying the overlap window. */
+    fun identity(): String = sourceUrl
+
     data class Media(val asset: MediaAsset) : CollectedItem {
         override val sourceUrl: String get() = asset.url
         override val title: String? get() = asset.title
@@ -60,6 +63,8 @@ data class CrawlRequest(
     val includeText: Boolean = false,
     /** Epoch seconds; content older than this was already covered by a prior run. */
     val since: Long? = null,
+    /** Identities seen by the prior run; skips duplicates inside the overlap window. */
+    val seenIds: Set<String> = emptySet(),
 )
 
 data class SavedMedia(

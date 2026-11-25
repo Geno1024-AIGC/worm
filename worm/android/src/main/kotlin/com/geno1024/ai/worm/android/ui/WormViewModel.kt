@@ -29,6 +29,7 @@ import com.geno1024.ai.worm.core.MediaAsset
 import com.geno1024.ai.worm.core.MediaSink
 import com.geno1024.ai.worm.core.ResumeQueue
 import com.geno1024.ai.worm.core.ResumeRunner
+import com.geno1024.ai.worm.core.SEEN_ID_LIMIT
 import com.geno1024.ai.worm.core.sinceOf
 import com.geno1024.ai.worm.core.qzone.normalizeUin
 import com.geno1024.ai.worm.core.qzone.requireQzoneAuth
@@ -255,16 +256,19 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
                 val keySubject = journalSubject(current.source, subject)
                 val stamp = if (current.forceAll) null else journal.lastSuccess(crawler.id, keySubject)
                 val since = sinceOf(stamp)
+                val seenIds = if (current.forceAll) emptySet() else stamp?.seenIds?.toSet().orEmpty()
                 val liveWarnings = Collections.synchronizedList(mutableListOf<String>())
                 val listener = appListener(crawler.id, subject, liveWarnings)
                 val report = crawler.collect(
-                    CrawlRequest(subject, since = since),
+                    CrawlRequest(subject, since = since, seenIds = seenIds),
                     session,
                     sink,
                     listener,
                 )
+                val seen = (stamp?.seenIds.orEmpty() + report.items.map { it.identity() })
+                    .distinct().takeLast(SEEN_ID_LIMIT)
                 journal.record(
-                    CrawlStamp(crawler.id, keySubject, System.currentTimeMillis() / 1000, report.newestItemAt),
+                    CrawlStamp(crawler.id, keySubject, System.currentTimeMillis() / 1000, report.newestItemAt, seen),
                 )
                 refreshLastRun()
                 queue.clear()

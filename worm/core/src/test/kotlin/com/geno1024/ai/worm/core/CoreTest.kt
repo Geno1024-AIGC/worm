@@ -109,7 +109,10 @@ class CoreTest {
 
     @Test
     fun `crawl journal round trips per-target watermarks`() {
-        val zhihu = CrawlStamp("zhihu.user", "alice", 1_700_000_000L, 1_699_999_900L)
+        val zhihu = CrawlStamp(
+            "zhihu.user", "alice", 1_700_000_000L, 1_699_999_900L,
+            listOf("answer/a1", "image/b2"),
+        )
         val qzone = CrawlStamp("qzone", "12345", 1_600_000_000L)
         val body = serializeCrawlJournal(
             mapOf(
@@ -121,7 +124,7 @@ class CoreTest {
         assertEquals(zhihu, parsed[crawlKey("zhihu.user", "alice")])
         assertEquals(qzone, parsed[crawlKey("qzone", "12345")])
         assertEquals(emptyMap<String, CrawlStamp>(), parseCrawlJournal("{broken"))
-        assertEquals(zhihu.lastSuccessAt - INCREMENTAL_OVERLAP_SEC, sinceOf(zhihu))
+        assertEquals(zhihu.newestItemAt!! - INCREMENTAL_OVERLAP_SEC, sinceOf(zhihu))
         assertNull(sinceOf(null))
     }
 

@@ -79,18 +79,25 @@ class ZhihuCrawler(
                     pageTimes += content.createdAt
                     content.createdAt?.let { if (it > newestAt) newestAt = it }
                     if (isBeforeWatermark(content.createdAt, since)) continue
+                    val candidates = mutableListOf<CollectedItem>()
                     for (asset in content.media) {
                         val folder = if (asset.kind == MediaKind.IMAGE) "image" else "video"
-                        val placed = asset.copy(relativeDir = "zhihu/$token/$folder")
-                        if (seen.add("${placed.kind.name}:${placed.url}")) items += CollectedItem.Media(placed)
+                        candidates += CollectedItem.Media(asset.copy(relativeDir = "zhihu/$token/$folder"))
                     }
                     if (request.includeText && content.html.isNotBlank()) {
-                        items += CollectedItem.Text(
+                        candidates += CollectedItem.Text(
                             sourceUrl = content.url,
                             title = content.title,
                             body = content.html,
                             createdAt = content.createdAt,
                         )
+                    }
+                    for (item in candidates) {
+                        if (item.identity() in request.seenIds) continue
+                        if (item is CollectedItem.Media &&
+                            !seen.add("${item.asset.kind.name}:${item.asset.url}")
+                        ) continue
+                        items += item
                     }
                 }
 

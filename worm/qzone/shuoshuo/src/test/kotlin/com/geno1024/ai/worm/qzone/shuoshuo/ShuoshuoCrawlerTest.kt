@@ -156,6 +156,21 @@ class ShuoshuoCrawlerTest {
     }
 
     @Test
+    fun `already seen identities are not replayed in the overlap`(@TempDir temp: File) = runBlocking {
+        val body = """
+            _preloadCallback({"code":0,"subcode":0,"total":1,"hasMore":false,"msglist":[
+              {"tid":"t1","created_time":1700000000,"pic":[{"url":"https://p.qzone.com/a.jpg"}]}
+            ]});
+        """.trimIndent()
+        val crawler = ShuoshuoCrawler(FakeHttp(body), File(temp, "cache"), downloadDelayMs = 0)
+        val report = crawler.collect(
+            CrawlRequest("12345", seenIds = setOf("https://p.qzone.com/a.jpg")),
+            session, DirectoryMediaSink(File(temp, "media")),
+        )
+        assertTrue(report.items.isEmpty())
+    }
+
+    @Test
     fun `auth error becomes a warning instead of a silent empty result`(@TempDir temp: File) = runBlocking {
         val http = FakeHttp("""_preloadCallback({"code":-3000,"subcode":0,"message":"login expired"});""")
         val crawler = ShuoshuoCrawler(http, File(temp, "cache"), downloadDelayMs = 0)

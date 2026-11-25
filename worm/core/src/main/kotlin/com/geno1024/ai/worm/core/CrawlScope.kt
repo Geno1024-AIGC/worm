@@ -24,6 +24,9 @@ fun pageCountOf(total: Int?, pageSize: Int): Int? =
  */
 const val INCREMENTAL_OVERLAP_SEC: Long = 6 * 60 * 60L
 
+/** Recent identities kept per target; enough to cover the overlap without growing forever. */
+const val SEEN_ID_LIMIT = 300
+
 /** One item is older than the incremental watermark and needs no download. */
 fun isBeforeWatermark(createdAt: Long?, since: Long?): Boolean =
     createdAt != null && since != null && createdAt < since

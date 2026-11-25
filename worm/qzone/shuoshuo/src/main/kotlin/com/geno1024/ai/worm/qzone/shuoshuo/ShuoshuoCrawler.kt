@@ -98,19 +98,26 @@ class ShuoshuoCrawler(
                         .forEach { assets.putIfAbsent("${it.kind.name}:${it.url}", it) }
                 }
 
+                val candidates = mutableListOf<CollectedItem>()
                 for (asset in assets.values) {
                     // Images and videos share this folder; their extensions tell them apart.
-                    val placed = asset.copy(relativeDir = "qzone/$targetUin")
-                    if (seen.add("${placed.kind.name}:${placed.url}")) items += CollectedItem.Media(placed)
+                    candidates += CollectedItem.Media(asset.copy(relativeDir = "qzone/$targetUin"))
                 }
                 if (request.includeText && !content.isNullOrBlank()) {
-                    items += CollectedItem.Text(
+                    candidates += CollectedItem.Text(
                         sourceUrl = "https://user.qzone.qq.com/$targetUin/" +
                             (message.optStringOf("tid", "id") ?: "post"),
                         title = message.optStringOf("title", "tid"),
                         body = Jsoup.parse(content).text(),
                         createdAt = time,
                     )
+                }
+                for (item in candidates) {
+                    if (item.identity() in request.seenIds) continue
+                    if (item is CollectedItem.Media &&
+                        !seen.add("${item.asset.kind.name}:${item.asset.url}")
+                    ) continue
+                    items += item
                 }
             }
 

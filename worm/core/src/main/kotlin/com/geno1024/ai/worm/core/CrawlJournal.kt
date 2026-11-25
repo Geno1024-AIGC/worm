@@ -1,5 +1,6 @@
 package com.geno1024.ai.worm.core
 
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
@@ -9,14 +10,20 @@ data class CrawlStamp(
     val subject: String,
     val lastSuccessAt: Long,
     val newestItemAt: Long? = null,
+    val seenIds: List<String> = emptyList(),
 )
 
 /** NUL cannot occur in a crawler id or a user token, so keys never collide. */
 fun crawlKey(crawlerId: String, subject: String): String = "$crawlerId\u0000$subject"
 
 /** The watermark handed to a crawler; null means "full crawl". */
-fun sinceOf(stamp: CrawlStamp?): Long? =
-    stamp?.lastSuccessAt?.let { (it - INCREMENTAL_OVERLAP_SEC).coerceAtLeast(0) }
+fun sinceOf(stamp: CrawlStamp?): Long? {
+    val anchor = listOfNotNull(
+        stamp?.lastSuccessAt?.takeIf { it > 0 },
+        stamp?.newestItemAt?.takeIf { it > 0 },
+    ).minOrNull() ?: return null
+    return (anchor - INCREMENTAL_OVERLAP_SEC).coerceAtLeast(0)
+}
 
 /** Pure parse, so a corrupt journal can be tested without touching the filesystem. */
 fun parseCrawlJournal(body: String): Map<String, CrawlStamp> {
@@ -32,6 +39,9 @@ fun parseCrawlJournal(body: String): Map<String, CrawlStamp> {
             subject = value.optString("subject"),
             lastSuccessAt = at,
             newestItemAt = value.optLong("newestItemAt", -1).takeIf { it > 0 },
+            seenIds = value.optJSONArray("seenIds")?.let { array ->
+                (0 until array.length()).mapNotNull { array.optString(it, null)?.takeIf { id -> id.isNotBlank() } }
+            }.orEmpty(),
         )
     }
     return result
@@ -45,6 +55,9 @@ fun serializeCrawlJournal(stamps: Map<String, CrawlStamp>): String {
             .put("subject", stamp.subject)
             .put("lastSuccessAt", stamp.lastSuccessAt)
         stamp.newestItemAt?.let { value.put("newestItemAt", it) }
+        if (stamp.seenIds.isNotEmpty()) {
+            value.put("seenIds", JSONArray().apply { stamp.seenIds.forEach { put(it) } })
+        }
         root.put(key, value)
     }
     return root.toString()
