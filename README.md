@@ -110,7 +110,7 @@ Qzone 相册接口的 `hostUin` 是相册主人（抓取目标），`uin` 必须
 
 Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复用，没有第二条解析实现。
 
-1. 选择抓取源（`qzone` / `qzone/album` / 知乎用户），点「登录 QQ / 知乎」在 WebView 里登录；
+1. 选择抓取源（`qzone` / `qzone/album` / 知乎用户 / 微博用户 / Facebook 用户），点对应「登录 …」在 WebView 里登录；
    Cookie 由 `CookieManager` 采集，退出登录页即刷新界面上的登录态。知乎的 `z_c0` 常在扫码后的
    页面内异步写入、不会再触发导航回调，所以登录页除了 WebView 回调外还每秒轮询一次 Cookie，
    识别到登录态后自动返回。知乎直接进 `https://www.zhihu.com/signin`，并保留设备真实移动 UA、
@@ -118,15 +118,19 @@ Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复�
    换成「打开 App」页；伪装成普通手机 Chrome 才能拿到真正的登录页。桌面 UA 在这个 WebView 里会渲染成
    空白页，所以不用。WebView 内只拦 `zhihu://` 深链，其余 scheme 放行以免影响页面脚本。
    若仍登录不了，登录页右上角有「手动输入」兜底：从任意已登录的浏览器复制完整 Cookie 请求头粘贴进来
-   （按 `Domain=.zhihu.com` / `.qq.com` 写回 `CookieManager`），保存后立即识别登录态并返回。
-2. 填目标（QQ 号或知乎 `url_token` / 主页 URL）。app 里没有页数上限旋钮：全量抓取一直翻到接口
+   （按 `Domain=.zhihu.com` / `.qq.com` / `.weibo.cn` / `.facebook.com` 写回 `CookieManager`），
+   保存后立即识别登录态并返回。Facebook 推荐在这里填 `access_token=<token>` 走 Graph API；
+   网页 `xs` Cookie 只能作为回退。微博 WebView 走 `passport.weibo.cn` 的手机登录页，`SUB` / `SUBP`
+   决定可见内容。
+2. 填目标（QQ 号、知乎 `url_token`、微博数字 uid 或 Facebook 用户名 / 数字 ID / 主页 URL）。app 里没有页数上限旋钮：全量抓取一直翻到接口
    返回「没有更多」（内部防跑飞上限 1000 页）；只有存在该目标的上次成功记录时才会按时间戳提前停。
    相册源另有「相册名过滤」，留空抓所有可访问相册。Qzone 接口会返回
    `total` / `albumsInUser` / `totalInAlbum`，列表阶段据此显示总页数；知乎只给 `next`，没有总数。
    服务端不支持按时间过滤：说说用 `pos`/`num`、相册用 `pageStart`/`pageNum` 翻页，停止条件由
    「没有更多」或增量水位线决定。JVM CLI 仍保留 `--pages` 参数供调试截断。
 3. 可选「选择保存目录」用 SAF 授权一个目录；未选择时写到应用私有目录 `filesDir/worm-media`。
-   SAF 目录授权会被持久化，爬虫按上面的 `qzone/<QQ号>/…`、`zhihu/<token>/…` 结构写入。
+   SAF 目录授权会被持久化，爬虫按上面的 `qzone/<QQ号>/…`、`zhihu/<token>/…`、
+   `weibo/<uid>/…`、`facebook/<id>/…` 结构写入。
 4. 点「开始抓取」，先把列表翻完再批量下载：翻页时每发现 20 个媒体就写一次续传队列，下载阶段显示
    「媒体 i/n」确定进度条，
    最后给出警告与保存统计。抓取跑在 `Dispatchers.IO`，不阻塞主线程。
@@ -137,7 +141,8 @@ Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复�
    说明停在第几页，以及接口报告的总页数只是估算。
    勾选「强制爬全部」可忽略时间戳重翻所有页；已存在的文件仍然跳过（需要重新下载请先删除）。
    切换抓取源会清空目标、相册过滤和上次结果，恢复默认值。
-5. 抽屉里的「浏览」按 `qzone/<QQ号>/<相册名>/…`、`zhihu/<token>/…` 目录浏览已保存的媒体：
+5. 抽屉里的「浏览」按 `qzone/<QQ号>/<相册名>/…`、`zhihu/<token>/…`、`weibo/<uid>/…`、
+   `facebook/<id>/…` 目录浏览已保存的媒体：
    每个媒体缩略图下方显示文件时间，图片预览左上角显示到秒的完整时间；时间取文件修改时间，爬虫
    拿到发布时间时会写入该时间，否则是下载时间。部分 SAF provider 不允许改 mtime，这时时间会从
    app-private 的 `worm/media-times.json` 读取（抓取时同步记录，存的是 Unix 秒，浏览器读取时转成毫秒，

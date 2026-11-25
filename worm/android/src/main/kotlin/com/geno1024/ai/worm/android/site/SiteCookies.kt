@@ -19,6 +19,18 @@ object SiteCookies {
         "https://zhihu.com/",
         "https://api.zhihu.com/",
     )
+    private val WEIBO_URLS = listOf(
+        "https://weibo.cn/",
+        "https://m.weibo.cn/",
+        "https://weibo.com/",
+        "https://passport.weibo.cn/",
+    )
+    private val FACEBOOK_URLS = listOf(
+        "https://www.facebook.com/",
+        "https://m.facebook.com/",
+        "https://facebook.com/",
+        "https://graph.facebook.com/",
+    )
 
     fun read(site: Site): Map<String, String> {
         val manager = CookieManager.getInstance()
@@ -26,6 +38,8 @@ object SiteCookies {
         val urls = when (site) {
             Site.QQ -> QQ_URLS
             Site.ZHIHU -> ZHIHU_URLS
+            Site.WEIBO -> WEIBO_URLS
+            Site.FACEBOOK -> FACEBOOK_URLS
         }
         for (url in urls) {
             val raw = manager.getCookie(url) ?: continue
@@ -43,6 +57,10 @@ object SiteCookies {
     fun hasLogin(site: Site, cookies: Map<String, String>): Boolean = when (site) {
         Site.QQ -> cookies["p_skey"]?.isNotBlank() == true || cookies["skey"]?.isNotBlank() == true
         Site.ZHIHU -> cookies["z_c0"]?.isNotBlank() == true
+        // Facebook can authenticate either with a Graph token or the web session cookie.
+        Site.WEIBO -> cookies["SUB"]?.isNotBlank() == true || cookies["SUBP"]?.isNotBlank() == true
+        Site.FACEBOOK -> cookies["access_token"]?.isNotBlank() == true ||
+            cookies["xs"]?.isNotBlank() == true
     }
 
     fun flush() {

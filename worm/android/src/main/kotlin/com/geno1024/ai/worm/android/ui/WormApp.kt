@@ -249,6 +249,13 @@ fun WormApp() {
                         }
                     }
 
+                    if (ui.source == Source.FACEBOOK) {
+                        Text(
+                            "Facebook 推荐在登录页点「手动输入」填 access_token=<token>；网页 Cookie 仅作回退。",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+
                     Button(
                         onClick = { viewModel.start() },
                         enabled = !ui.running,
@@ -294,4 +301,6 @@ private fun sourceIcon(source: Source): ImageVector = when (source) {
     Source.QZONE -> Icons.Default.PhotoCamera
     Source.QZONE_ALBUM -> Icons.Default.Folder
     Source.ZHIHU -> Icons.Default.Language
+    Source.WEIBO -> Icons.Default.Person
+    Source.FACEBOOK -> Icons.Default.Language
 }

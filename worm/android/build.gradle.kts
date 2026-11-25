@@ -107,6 +107,8 @@ dependencies {
     implementation(project(":worm:qzone:shuoshuo"))
     implementation(project(":worm:qzone:album"))
     implementation(project(":worm:zhihu"))
+    implementation(project(":worm:weibo"))
+    implementation(project(":worm:facebook"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

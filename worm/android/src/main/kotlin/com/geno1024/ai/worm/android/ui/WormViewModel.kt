@@ -39,6 +39,10 @@ import com.geno1024.ai.worm.qzone.album.AlbumCrawler
 import com.geno1024.ai.worm.qzone.shuoshuo.ShuoshuoCrawler
 import com.geno1024.ai.worm.zhihu.ZhihuCrawler
 import com.geno1024.ai.worm.zhihu.normalizeZhihuSubject
+import com.geno1024.ai.worm.weibo.WeiboCrawler
+import com.geno1024.ai.worm.weibo.normalizeWeiboSubject
+import com.geno1024.ai.worm.facebook.FacebookCrawler
+import com.geno1024.ai.worm.facebook.normalizeFacebookSubject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -58,6 +62,8 @@ data class UiState(
     val albumFilter: String = "",
     val qqCookies: Map<String, String> = emptyMap(),
     val zhihuCookies: Map<String, String> = emptyMap(),
+    val weiboCookies: Map<String, String> = emptyMap(),
+    val facebookCookies: Map<String, String> = emptyMap(),
     val storageLabel: String = "应用私有目录",
     val storageUri: String? = null,
     val running: Boolean = false,
@@ -74,6 +80,8 @@ data class UiState(
         get() = when (source.site) {
             Site.QQ -> qqCookies
             Site.ZHIHU -> zhihuCookies
+            Site.WEIBO -> weiboCookies
+            Site.FACEBOOK -> facebookCookies
         }
 
     val loginReady: Boolean get() = SiteCookies.hasLogin(source.site, cookies)
@@ -156,6 +164,8 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
             it.copy(
                 qqCookies = SiteCookies.read(Site.QQ),
                 zhihuCookies = SiteCookies.read(Site.ZHIHU),
+                weiboCookies = SiteCookies.read(Site.WEIBO),
+                facebookCookies = SiteCookies.read(Site.FACEBOOK),
             )
         }
     }
@@ -164,6 +174,8 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
     private fun journalSubject(source: Source, raw: String): String = when (source) {
         Source.QZONE, Source.QZONE_ALBUM -> normalizeUin(raw).takeIf { it != "0" } ?: ""
         Source.ZHIHU -> normalizeZhihuSubject(raw)
+        Source.WEIBO -> normalizeWeiboSubject(raw)
+        Source.FACEBOOK -> normalizeFacebookSubject(raw)
     }
 
     private fun refreshLastRun() {
@@ -181,6 +193,8 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         Source.QZONE -> "qzone"
         Source.QZONE_ALBUM -> "qzone/album"
         Source.ZHIHU -> "zhihu.user"
+        Source.WEIBO -> "weibo.user"
+        Source.FACEBOOK -> "facebook.user"
     }
 
     private fun formatTime(epochSeconds: Long): String =
@@ -365,6 +379,8 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         "qzone", "qzone.shuoshuo" -> Source.QZONE // old queues keep working
         "qzone/album", "qzone.album" -> Source.QZONE_ALBUM
         "zhihu.user" -> Source.ZHIHU
+        "weibo.user" -> Source.WEIBO
+        "facebook.user" -> Source.FACEBOOK
         else -> null
     }
 
@@ -387,6 +403,12 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
             Site.ZHIHU -> if (cookies["z_c0"].isNullOrBlank()) {
                 throw IllegalStateException("知乎登录态缺少 z_c0，请重新登录知乎")
             }
+            Site.WEIBO -> if (cookies["SUB"].isNullOrBlank() && cookies["SUBP"].isNullOrBlank()) {
+                throw IllegalStateException("微博登录态缺少 SUB/SUBP，请重新登录微博")
+            }
+            Site.FACEBOOK -> if (cookies["access_token"].isNullOrBlank() && cookies["xs"].isNullOrBlank()) {
+                throw IllegalStateException("Facebook 需要 access_token 或网页 Cookie（xs），请重新登录或手动输入")
+            }
         }
         return CrawlSession(cookies, cookies["uin"] ?: cookies["p_uin"])
     }
@@ -405,6 +427,8 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
                 http, cacheDir, maxPagesPerKind = cap,
                 upgradeImages = state.upgradeZhihuImages,
             )
+            Source.WEIBO -> WeiboCrawler(http, cacheDir, maxPages = cap)
+            Source.FACEBOOK -> FacebookCrawler(http, cacheDir, maxPages = cap)
         }
     }
 

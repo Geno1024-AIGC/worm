@@ -103,10 +103,14 @@ class LoginActivity : ComponentActivity() {
         val url = when (site) {
             Site.QQ -> "https://user.qzone.qq.com/"
             Site.ZHIHU -> "https://www.zhihu.com/"
+            Site.WEIBO -> "https://weibo.cn/"
+            Site.FACEBOOK -> "https://www.facebook.com/"
         }
         val domain = when (site) {
             Site.QQ -> ".qq.com"
             Site.ZHIHU -> ".zhihu.com"
+            Site.WEIBO -> ".weibo.cn"
+            Site.FACEBOOK -> ".facebook.com"
         }
         val manager = CookieManager.getInstance()
         var count = 0
@@ -147,6 +151,12 @@ private fun LoginScreen(
     var showCookie by remember { mutableStateOf(false) }
     var cookieText by remember { mutableStateOf("") }
     val seen = remember { mutableStateOf(false) }
+    // Facebook's Graph token is the reliable path; the web session is only a fallback.
+    val manualHint = if (site == Site.FACEBOOK) {
+        "推荐粘贴 access_token=<token>（Graph API 更稳定）；也可粘贴浏览器里的完整 Cookie 请求头。"
+    } else {
+        "在浏览器里登录 ${site.label}，复制完整的 Cookie 请求头后粘贴到这里。"
+    }
 
     Scaffold(
         topBar = {
@@ -181,7 +191,7 @@ private fun LoginScreen(
                 Column {
                     Text(status, modifier = Modifier.padding(8.dp))
                     Text(
-                        "网页登录不可用时，可在浏览器登录后点右上角「手动输入」粘贴 Cookie。",
+                        "网页登录不可用时，点右上角「手动输入」粘贴 Cookie 或 access_token。",
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(horizontal = 8.dp),
                     )
@@ -193,17 +203,14 @@ private fun LoginScreen(
     if (showCookie) {
         AlertDialog(
             onDismissRequest = { showCookie = false },
-            title = { Text("粘贴 ${site.label} Cookie") },
+            title = { Text("粘贴 ${site.label} 登录态") },
             text = {
                 Column {
-                    Text(
-                        "在浏览器里登录 ${site.label}，复制完整的 Cookie 请求头后粘贴到这里。",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Text(manualHint, style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(
                         value = cookieText,
                         onValueChange = { cookieText = it },
-                        label = { Text("Cookie") },
+                        label = { Text(if (site == Site.FACEBOOK) "Cookie 或 access_token=<token>" else "Cookie") },
                         minLines = 3,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -236,9 +243,10 @@ private fun AndroidWebView(
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
-                if (site == Site.ZHIHU) {
+                if (site == Site.ZHIHU || site == Site.FACEBOOK) {
                     // Zhihu sees the "; wv" / "Version/4.0" markers in the default
-                    // WebView UA and swaps the login form for an "open in app" page.
+                    // WebView UA and swaps the login form for an "open in app" page;
+                    // Facebook can also render a blank page for WebView-marked UAs.
                     // Keep the device's real model and Chrome version, drop only the
                     // WebView markers so this looks like an ordinary mobile Chrome.
                     settings.userAgentString = settings.userAgentString
@@ -277,6 +285,8 @@ private fun AndroidWebView(
                     when (site) {
                         Site.QQ -> "https://user.qzone.qq.com/"
                         Site.ZHIHU -> "https://www.zhihu.com/signin?next=%2F"
+                        Site.WEIBO -> "https://passport.weibo.cn/signin/login?entry=mweibo"
+                        Site.FACEBOOK -> "https://www.facebook.com/login.php"
                     },
                 )
                 onReady(this)

@@ -4,4 +4,6 @@ package com.geno1024.ai.worm.android.site
 enum class Site(val label: String) {
     QQ("QQ / QQ空间"),
     ZHIHU("知乎"),
+    WEIBO("微博"),
+    FACEBOOK("Facebook"),
 }
