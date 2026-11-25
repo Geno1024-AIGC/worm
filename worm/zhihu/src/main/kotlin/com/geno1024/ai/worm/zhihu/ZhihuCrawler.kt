@@ -9,6 +9,7 @@ import com.geno1024.ai.worm.core.CrawlRequest
 import com.geno1024.ai.worm.core.Crawler
 import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.HttpPortal
+import com.geno1024.ai.worm.core.HttpResponse
 import com.geno1024.ai.worm.core.JdkHttpPortal
 import com.geno1024.ai.worm.core.isBeforeWatermark
 import com.geno1024.ai.worm.core.MediaDownloader
@@ -56,21 +57,17 @@ class ZhihuCrawler(
             var page = 0
             while (page < maxPagesPerKind) {
                 listener.onProgress(CrawlProgress(kind.name, page + 1, null, "offset=$offset，已发现 ${items.size} 项"))
-                val response = http.get(
-                    buildZhihuListUrl(token, kind, offset, pageSize),
-                    session,
-                    REFERER,
-                    API_HEADERS,
-                )
-                if (response.status == 401 || response.status == 403) {
-                    warnings += "知乎 ${kind.name} 需要登录或触发风控（HTTP ${response.status}）"
-                    break
+                val url = buildZhihuListUrl(token, kind, offset, pageSize)
+                var response = http.get(url, session, REFERER, API_HEADERS)
+                if (!usable(response, kind, warnings)) break
+                var parsed = parseZhihuListPage(response.body, kind, REFERER, offset)
+                // A chunked/truncated body can slip past the HTTP Content-Length check.
+                // Re-fetch once before turning a transient cut-off into a crawl failure.
+                if (parsed.error?.contains("响应被截断") == true) {
+                    response = http.get(url, session, REFERER, API_HEADERS)
+                    if (!usable(response, kind, warnings)) break
+                    parsed = parseZhihuListPage(response.body, kind, REFERER, offset)
                 }
-                if (!response.isSuccess) {
-                    warnings += "知乎 ${kind.name} 返回 HTTP ${response.status}"
-                    break
-                }
-                val parsed = parseZhihuListPage(response.body, kind, REFERER, offset)
                 if (parsed.error != null) {
                     warnings += "知乎 ${kind.name}: ${parsed.error}"
                     break
@@ -123,4 +120,17 @@ class ZhihuCrawler(
             newestItemAt = newestAt.takeIf { it > 0 },
         )
     }
+
+    private fun usable(response: HttpResponse, kind: ZhihuKind, warnings: MutableList<String>): Boolean =
+        when {
+            response.status == 401 || response.status == 403 -> {
+                warnings += "知乎 ${kind.name} 需要登录或触发风控（HTTP ${response.status}）"
+                false
+            }
+            !response.isSuccess -> {
+                warnings += "知乎 ${kind.name} 返回 HTTP ${response.status}"
+                false
+            }
+            else -> true
+        }
 }

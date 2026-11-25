@@ -37,6 +37,18 @@ class ZhihuTest {
         }
     }
 
+    private class SequenceHttp(private val bodies: List<String>) : HttpPortal {
+        var calls = 0
+        override fun get(url: String, session: CrawlSession, referer: String?, extraHeaders: Map<String, String>): HttpResponse {
+            val body = bodies.getOrNull(calls++) ?: bodies.last()
+            return HttpResponse(200, body, url)
+        }
+        override fun download(url: String, session: CrawlSession, referer: String?, target: File, onBytes: (Long, Long?) -> Unit): File {
+            target.writeBytes("payload".toByteArray())
+            return target
+        }
+    }
+
     @Test
     fun `subject accepts url and bare token`() {
         assertEquals("geno", normalizeZhihuSubject("https://www.zhihu.com/people/geno/answers"))
@@ -115,6 +127,19 @@ class ZhihuTest {
         assertTrue(http.lastUrl.contains("/members/geno/answers"))
         assertTrue(File(temp, "media/zhihu/geno/image/a1-1.jpg").isFile)
         assertTrue(File(temp, "media/zhihu/geno/video/a1-2.mp4").isFile)
+    }
+
+    @Test
+    fun `truncated list response is retried once`(@TempDir temp: File) = runBlocking {
+        val http = SequenceHttp(listOf("""{"paging":{"is_end":false,"totals":8""", body))
+        val crawler = ZhihuCrawler(http, File(temp, "cache"), kinds = setOf(ZhihuKind.ANSWER), downloadDelayMs = 0)
+        val report = crawler.collect(
+            CrawlRequest("geno"), CrawlSession(mapOf("z_c0" to "token")),
+            DirectoryMediaSink(File(temp, "media")),
+        )
+        assertEquals(2, http.calls)
+        assertEquals(3, report.items.size)
+        assertTrue(report.warnings.isEmpty())
     }
 
     @Test
