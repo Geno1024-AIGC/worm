@@ -284,8 +284,8 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
     }
 
     private fun httpPortal(): HttpPortal = JdkHttpPortal(
-        // Never advertise the crawler: QQ/Zhihu serve a captcha SVG instead of JSON
-        // when the UA says "worm-android" (same trap as the login WebView).
+        // Never advertise the crawler: a site that spots a bot may answer with a
+        // captcha SVG instead of JSON (same trap the login WebView used to hit).
         userAgent = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36",
         delayMs = 800L,

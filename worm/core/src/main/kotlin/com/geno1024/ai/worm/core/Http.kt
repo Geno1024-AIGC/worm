@@ -168,8 +168,8 @@ class JdkHttpPortal(
     }
 
     companion object {
-        // No bot token here: QQ/Zhihu answer with a captcha SVG instead of JSON as
-        // soon as the UA advertises a crawler (the app's WebView used to append one too).
+        // No bot token here: sites that spot a crawler can answer with a captcha SVG
+        // instead of JSON (the app's login WebView used to append one too).
         const val DEFAULT_USER_AGENT =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36"
         private val RETRYABLE = setOf(408, 425, 429, 500, 502, 503, 504)
