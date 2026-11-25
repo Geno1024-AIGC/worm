@@ -118,7 +118,16 @@ fun extractZhihuContent(item: JSONObject, fallbackKind: ZhihuKind, referer: Stri
                 else -> null
             }
         } ?: return
-        assets.putIfAbsent("${mediaKind.name}:$absolute", MediaAsset(
+        // Group image variants by CDN id and keep the largest link the page gave us.
+        // Videos keep their exact URL: two different videos may share a hash prefix.
+        val key = if (mediaKind == MediaKind.IMAGE) {
+            "IMAGE:${ZhihuMedia.canonical(absolute)}"
+        } else {
+            "VIDEO:$absolute"
+        }
+        val previous = assets[key]
+        if (previous != null && ZhihuMedia.rank(absolute) <= ZhihuMedia.rank(previous.url)) return
+        assets[key] = MediaAsset(
             url = absolute,
             kind = mediaKind,
             id = id,
@@ -128,8 +137,8 @@ fun extractZhihuContent(item: JSONObject, fallbackKind: ZhihuKind, referer: Stri
             createdAt = created,
             referer = referer,
             extension = MediaFiles.extensionOf(absolute, mediaKind),
-            isCover = cover,
-        ))
+            isCover = cover || previous?.isCover == true,
+        )
     }
 
     if (!contentHtml.isNullOrBlank()) {

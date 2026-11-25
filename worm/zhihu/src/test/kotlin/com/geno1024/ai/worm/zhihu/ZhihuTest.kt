@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.json.JSONObject
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -62,6 +63,23 @@ class ZhihuTest {
         val error = page.error ?: error("expected a readable SVG warning")
         assertTrue(error.contains("SVG"))
         assertFalse(error.contains("illegal character"))
+    }
+
+    @Test
+    fun `only the largest image variant is kept`() {
+        val small = "https://picx.zhimg.com/v2-abc_r.jpg?source=x"
+        val large = "https://pic1.zhimg.com/50/v2-abc_720w.jpg?source=x"
+        val original = "https://pic1.zhimg.com/v2-def.jpg"
+        assertEquals(ZhihuMedia.canonical(small), ZhihuMedia.canonical(large))
+        assertTrue(ZhihuMedia.rank(large) > ZhihuMedia.rank(small))
+
+        val html = """<img src="$small" data-original="$large"><img src="$original">"""
+        val item = JSONObject()
+            .put("id", "a1")
+            .put("created", 1_700_000_000L)
+            .put("content", html)
+        val content = extractZhihuContent(item, ZhihuKind.ANSWER, "https://www.zhihu.com/")!!
+        assertEquals(listOf(large, original), content.media.map { it.url })
     }
 
     @Test
