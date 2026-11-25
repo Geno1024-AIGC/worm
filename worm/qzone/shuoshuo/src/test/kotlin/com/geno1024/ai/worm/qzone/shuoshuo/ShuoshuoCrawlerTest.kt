@@ -122,6 +122,8 @@ class ShuoshuoCrawlerTest {
         val listSteps = events.filter { it.stage == "说说列表" }
         val mediaSteps = events.filter { it.stage == "媒体" }
         assertEquals(listOf(1, 2), listSteps.map { it.current })
+        assertTrue(listSteps.all { it.total == 5 })
+        assertTrue(listSteps.all { it.detail.contains("共 5 页") })
         assertEquals((1..21).toList(), mediaSteps.map { it.current })
         assertTrue(mediaSteps.all { it.total == 21 })
         assertTrue(events.indexOf(listSteps.last()) < events.indexOf(mediaSteps.first()))

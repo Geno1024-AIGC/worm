@@ -17,6 +17,7 @@ import com.geno1024.ai.worm.core.MediaSink
 import com.geno1024.ai.worm.core.optLongOf
 import com.geno1024.ai.worm.core.optStringOf
 import com.geno1024.ai.worm.core.objects
+import com.geno1024.ai.worm.core.pageCountOf
 import com.geno1024.ai.worm.core.qzone.buildMsgListUrl
 import com.geno1024.ai.worm.core.qzone.extractMessageMedia
 import com.geno1024.ai.worm.core.qzone.isAuthError
@@ -61,9 +62,12 @@ class ShuoshuoCrawler(
 
         // Phase 1: discover every accessible page, without touching the network for bytes.
         while (page < maxPages) {
-            listener.onProgress(CrawlProgress("说说列表", page + 1, null, "pos=$pos"))
             val body = http.get(buildMsgListUrl(targetUin, auth.gtk, pos, PAGE_SIZE), auth.session, REFERER).body
             val parsed = parseMsgListResponse(body)
+            val pages = pageCountOf(parsed.total, PAGE_SIZE)
+            listener.onProgress(CrawlProgress(
+                "说说列表", page + 1, pages, "pos=$pos${pages?.let { "，共 $it 页" } ?: ""}",
+            ))
             if (isAuthError(parsed.code, parsed.subcode)) {
                 warnings += "登录态失效（code=${parsed.code}, subcode=${parsed.subcode}），请重新登录"
                 break

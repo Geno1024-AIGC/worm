@@ -25,6 +25,7 @@ import com.geno1024.ai.worm.core.MediaAsset
 import com.geno1024.ai.worm.core.MediaSink
 import com.geno1024.ai.worm.core.ResumeQueue
 import com.geno1024.ai.worm.core.ResumeRunner
+import com.geno1024.ai.worm.core.pageCapOf
 import com.geno1024.ai.worm.core.qzone.requireQzoneAuth
 import com.geno1024.ai.worm.qzone.album.AlbumCrawler
 import com.geno1024.ai.worm.qzone.shuoshuo.ShuoshuoCrawler
@@ -41,6 +42,8 @@ import java.util.Collections
 data class UiState(
     val source: Source = Source.QZONE,
     val subject: String = "",
+    val pageLimit: String = "10",
+    val albumFilter: String = "",
     val qqCookies: Map<String, String> = emptyMap(),
     val zhihuCookies: Map<String, String> = emptyMap(),
     val storageLabel: String = "应用私有目录",
@@ -147,6 +150,14 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(subject = value) }
     }
 
+    fun updatePageLimit(value: String) {
+        _state.update { it.copy(pageLimit = value) }
+    }
+
+    fun updateAlbumFilter(value: String) {
+        _state.update { it.copy(albumFilter = value) }
+    }
+
     fun useStorage(context: Context, uri: Uri?) {
         if (uri != null) {
             val tree = DocumentFile.fromTreeUri(context, uri)
@@ -181,7 +192,7 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
                 val current = _state.value
                 val session = sessionFor(current)
                 val http = httpPortal()
-                val crawler = crawlerFor(current.source, http, File(app.cacheDir, "downloads"))
+                val crawler = crawlerFor(current, http, File(app.cacheDir, "downloads"))
                 val displayName = crawler.displayName
                 val liveWarnings = Collections.synchronizedList(mutableListOf<String>())
                 val listener = appListener(crawler.id, current.subject.trim(), liveWarnings)
@@ -292,12 +303,18 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         return CrawlSession(cookies, cookies["uin"] ?: cookies["p_uin"])
     }
 
-    private fun crawlerFor(source: Source, http: HttpPortal, cacheDir: File): Crawler =
-        when (source) {
-            Source.QZONE -> ShuoshuoCrawler(http, cacheDir)
-            Source.QZONE_ALBUM -> AlbumCrawler(http, cacheDir)
-            Source.ZHIHU -> ZhihuCrawler(http, cacheDir)
+    private fun crawlerFor(state: UiState, http: HttpPortal, cacheDir: File): Crawler {
+        val cap = pageCapOf(state.pageLimit)
+        return when (state.source) {
+            Source.QZONE -> ShuoshuoCrawler(http, cacheDir, maxPages = cap)
+            Source.QZONE_ALBUM -> AlbumCrawler(
+                http, cacheDir,
+                maxPagesPerAlbum = cap,
+                albumFilter = state.albumFilter.trim().ifBlank { null },
+            )
+            Source.ZHIHU -> ZhihuCrawler(http, cacheDir, maxPagesPerKind = cap)
         }
+    }
 
     private companion object {
         const val KEY_STORAGE = "storageTreeUri"

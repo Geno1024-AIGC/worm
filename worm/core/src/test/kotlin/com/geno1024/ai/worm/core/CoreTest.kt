@@ -213,6 +213,19 @@ class CoreTest {
     }
 
     @Test
+    fun `page cap and reported page count`() {
+        assertEquals(10, pageCapOf("10"))
+        assertEquals(10, pageCapOf(null))
+        assertEquals(10, pageCapOf("abc"))
+        assertEquals(ALL_PAGES, pageCapOf("0"))
+        assertEquals(ALL_PAGES, pageCapOf("-5"))
+        assertEquals(ALL_PAGES, pageCapOf("99999"))
+        assertEquals(3, pageCountOf(41, 20))
+        assertNull(pageCountOf(null, 20))
+        assertNull(pageCountOf(0, 20))
+    }
+
+    @Test
     fun `json output escapes strings`() {
         assertEquals("""{"a":"x\"y","b":[1,true]}""", JsonOutput.value(mapOf("a" to "x\"y", "b" to listOf(1, true))))
     }

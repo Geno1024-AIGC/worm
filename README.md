@@ -84,7 +84,11 @@ Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复�
 
 1. 选择抓取源（`qzone` / `qzone/album` / 知乎用户），点「登录 QQ / 知乎」在 WebView 里登录；
    Cookie 由 `CookieManager` 采集，退出登录页即刷新界面上的登录态。
-2. 填目标（QQ 号或知乎 `url_token` / 主页 URL）。范围由分页上限决定，不再有「最多收集条数」旋钮。
+2. 填目标（QQ 号或知乎 `url_token` / 主页 URL），并设「页数上限」：默认 10 页，`0` 表示抓到没有更多
+   为止（上限 1000 页）。相册源另有「相册名过滤」，留空抓所有可访问相册。Qzone 接口会返回
+   `total` / `albumsInUser` / `totalInAlbum`，列表阶段据此显示总页数；知乎只给 `next`，没有总数。
+   没有按时间截取：说说用 `pos`/`num`、相册用 `pageStart`/`pageNum` 翻页，服务端不支持按时间过滤，
+   且相册照片的时间字段可能缺失，所以页数是唯一可靠的旋钮。
 3. 可选「选择保存目录」用 SAF 授权一个目录；未选择时写到应用私有目录 `filesDir/worm-media`。
    SAF 目录授权会被持久化，爬虫按上面的 `qzone/<QQ号>/…`、`zhihu/<token>/…` 结构写入。
 4. 点「开始抓取」，先把列表翻完再批量下载：列表阶段显示页码，下载阶段显示「媒体 i/n」确定进度条，

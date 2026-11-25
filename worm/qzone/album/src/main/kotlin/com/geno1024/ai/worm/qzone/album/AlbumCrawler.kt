@@ -14,6 +14,7 @@ import com.geno1024.ai.worm.core.MediaDownloader
 import com.geno1024.ai.worm.core.MediaFiles
 import com.geno1024.ai.worm.core.MediaSink
 import com.geno1024.ai.worm.core.objects
+import com.geno1024.ai.worm.core.pageCountOf
 import com.geno1024.ai.worm.core.qzone.QzoneAlbum
 import com.geno1024.ai.worm.core.qzone.buildAlbumListUrl
 import com.geno1024.ai.worm.core.qzone.buildPhotoListUrl
@@ -70,13 +71,15 @@ class AlbumCrawler(
         var albumStart = 0
         var albumPage = 0
         while (albumPage < maxAlbumListPages) {
-            listener.onProgress(CrawlProgress(
-                "相册列表", albumPage + 1, null, "已发现 ${allAlbums.size} 本相册",
-            ))
             val result = parseAlbumListResponse(http.get(
                 buildAlbumListUrl(targetUin, viewerUin, auth.gtk, albumStart, pageSize),
                 auth.session, REFERER, PHOTO_HEADERS,
             ).body)
+            val listPages = pageCountOf(result.albumsInUser, pageSize)
+            listener.onProgress(CrawlProgress(
+                "相册列表", albumPage + 1, listPages,
+                "已发现 ${allAlbums.size} 本相册${listPages?.let { "，共 $it 页" } ?: ""}",
+            ))
             if (isAuthError(result.code, result.subcode)) {
                 warnings += "登录态失效（code=${result.code}），请重新登录"
                 break
@@ -111,14 +114,15 @@ class AlbumCrawler(
             var start = 0
             var page = 0
             while (page < maxPagesPerAlbum) {
-                listener.onProgress(CrawlProgress(
-                    "相册", albumIndex + 1, albums.size,
-                    "${album.name} · 第${page + 1}页，已发现 ${items.size} 项",
-                ))
                 val photoPage = parsePhotoListResponse(http.get(
                     buildPhotoListUrl(targetUin, viewerUin, auth.gtk, album.id, start, pageSize),
                     auth.session, REFERER, PHOTO_HEADERS,
                 ).body)
+                val albumPages = pageCountOf(photoPage.totalInAlbum, pageSize)
+                listener.onProgress(CrawlProgress(
+                    "相册", albumIndex + 1, albums.size,
+                    "${album.name} · 第${page + 1}页${albumPages?.let { "/$it" } ?: ""}，已发现 ${items.size} 项",
+                ))
                 if (isAuthError(photoPage.code, photoPage.subcode)) {
                     warnings += "${album.name}: 登录态失效（code=${photoPage.code}）"
                     break

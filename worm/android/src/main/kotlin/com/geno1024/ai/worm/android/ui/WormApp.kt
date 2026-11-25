@@ -180,6 +180,24 @@ fun WormApp() {
                         modifier = Modifier.fillMaxWidth(),
                     )
 
+                    OutlinedTextField(
+                        value = ui.pageLimit,
+                        onValueChange = viewModel::updatePageLimit,
+                        label = { Text("页数上限（0=全部，最多 1000）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    if (ui.source == Source.QZONE_ALBUM) {
+                        OutlinedTextField(
+                            value = ui.albumFilter,
+                            onValueChange = viewModel::updateAlbumFilter,
+                            label = { Text("相册名过滤（留空=全部相册）") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("登录态：${if (ui.loginReady) "已就绪" else "未登录"}")
