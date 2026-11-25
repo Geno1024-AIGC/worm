@@ -234,4 +234,25 @@ class CoreTest {
         assertEquals(3L, saved.size)
         assertEquals(byteArrayOf(1, 2, 3).toList(), File(temp, "albums/My_Album/abc.jpg").readBytes().toList())
     }
+
+    @Test
+    fun `directory sink stamps publish time onto the saved file`(@TempDir temp: File) {
+        val sink = DirectoryMediaSink(temp)
+        val createdAt = 1700000000L
+        val asset = MediaAsset(
+            url = "https://example.com/clip.mp4",
+            kind = MediaKind.VIDEO,
+            id = "clip",
+            createdAt = createdAt,
+        )
+        val source = File(temp, "source.part").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        assertEquals("clip.mp4", sink.accept(asset, source).name)
+        assertEquals(createdAt * 1000L, File(temp, "videos/clip.mp4").lastModified())
+
+        val undated = asset.copy(id = "undated", createdAt = null)
+        source.writeBytes(byteArrayOf(1, 2, 3))
+        val saved = sink.accept(undated, source)
+        assertTrue(File(temp, "videos/undated.mp4").lastModified() > 0)
+        assertEquals("undated.mp4", saved.name)
+    }
 }

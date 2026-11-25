@@ -54,28 +54,34 @@ class SafMediaSink(
         dir.findFile(partName)?.delete()
         val part = dir.createFile(MediaFiles.mimeOf(name), partName)
             ?: error("cannot create $partName in the chosen directory")
+        var kept = false
         try {
             resolver.openOutputStream(part.uri, "w")?.use { output ->
                 source.inputStream().use { it.copyTo(output) }
             } ?: error("cannot open output stream for $partName")
 
             previous?.delete()
-            if (!part.renameTo(name)) {
-                // Some providers refuse rename; copy into the final name instead.
-                val final = dir.createFile(MediaFiles.mimeOf(name), name)
-                    ?: error("cannot create $name in the chosen directory")
-                resolver.openOutputStream(final.uri, "w")?.use { output ->
-                    resolver.openInputStream(part.uri)?.use { it.copyTo(output) }
-                        ?: error("cannot read back $partName")
-                } ?: error("cannot open output stream for $name")
-                part.delete()
-                applyCreatedTime(final.uri, asset.createdAt)
-                return SavedMedia(asset, name, final.length(), existed)
+            if (part.renameTo(name)) {
+                // renameTo rewrites part's URI to the final document, so from here
+                // on `part` IS the saved file and must not be cleaned up.
+                kept = true
+                applyCreatedTime(part.uri, asset.createdAt)
+                return SavedMedia(asset, name, part.length(), existed)
             }
-            applyCreatedTime(part.uri, asset.createdAt)
-            return SavedMedia(asset, name, part.length(), existed)
+            // Some providers refuse rename; copy into the final name instead.
+            val final = dir.createFile(MediaFiles.mimeOf(name), name)
+                ?: error("cannot create $name in the chosen directory")
+            resolver.openOutputStream(final.uri, "w")?.use { output ->
+                resolver.openInputStream(part.uri)?.use { it.copyTo(output) }
+                    ?: error("cannot read back $partName")
+            } ?: error("cannot open output stream for $name")
+            applyCreatedTime(final.uri, asset.createdAt)
+            part.delete()
+            kept = true
+            return SavedMedia(asset, name, final.length(), existed)
         } finally {
-            if (part.exists()) part.delete()
+            // Only an abandoned attempt leaves a resumable partial behind.
+            if (!kept && part.exists()) runCatching { part.delete() }
         }
     }
 

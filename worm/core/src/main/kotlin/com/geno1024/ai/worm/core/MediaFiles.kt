@@ -94,7 +94,14 @@ class DirectoryMediaSink(private val root: File) : MediaSink {
         val target = target(asset)
         val existed = target.isFile && target.length() > 0
         MediaFiles.copyFinished(source, target)
+        applyCreatedTime(target, asset.createdAt)
         return SavedMedia(asset, target.name, target.length(), existed)
+    }
+
+    /** Qzone/Zhihu publish times are Unix seconds; mirror them onto the saved file. */
+    private fun applyCreatedTime(target: File, createdAt: Long?) {
+        if (createdAt == null || createdAt <= 0) return
+        runCatching { target.setLastModified(createdAt * 1000L) }
     }
 }
 
