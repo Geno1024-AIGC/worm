@@ -83,7 +83,9 @@ Qzone 相册接口的 `hostUin` 是相册主人（抓取目标），`uin` 必须
 Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复用，没有第二条解析实现。
 
 1. 选择抓取源（`qzone` / `qzone/album` / 知乎用户），点「登录 QQ / 知乎」在 WebView 里登录；
-   Cookie 由 `CookieManager` 采集，退出登录页即刷新界面上的登录态。
+   Cookie 由 `CookieManager` 采集，退出登录页即刷新界面上的登录态。知乎的 `z_c0` 常在扫码后的
+   页面内异步写入、不会再触发导航回调，所以登录页除了 WebView 回调外还每秒轮询一次 Cookie，
+   识别到登录态后自动返回；登录 WebView 不追加任何爬虫 UA 标记，避免知乎下发受限页面。
 2. 填目标（QQ 号或知乎 `url_token` / 主页 URL），并设「页数上限」：默认 10 页，`0` 表示抓到没有更多
    为止（上限 1000 页）。相册源另有「相册名过滤」，留空抓所有可访问相册。Qzone 接口会返回
    `total` / `albumsInUser` / `totalInAlbum`，列表阶段据此显示总页数；知乎只给 `next`，没有总数。
@@ -123,9 +125,14 @@ CLI 的 `credentials.json`。首次安装需要分别登录。
 失败再依次回退其余源。APK 落到 `cacheDir/update/`，先写 `.part`、校验长度与 ZIP 魔数后原子改名，asset 名走白名单。
 改完名还会用 `PackageManager.getPackageArchiveInfo()` 校验：文件能被系统解析、版本戳与本条 release 完全一致、
 同包名的已安装应用签名一致。任何一步失败都当作该下载源失败并自动换下一个，避免把镜像返回的网页或损坏文件
-交给系统安装器、只报一句「解析包时出现问题」。通过 `FileProvider`（authority `<applicationId>.updates`）
-交给系统安装器。需要「安装未知来源应用」权限，并区分「设备上没有能打开 APK 的应用」与
-「安装器已返回结果」两种结局。
+交给系统安装器、只报一句「解析包时出现问题」。
+
+安装交接本身也修过：同一个 APK 从文件管理器能装、应用内调起安装器却报「解析包时出现问题」，
+通常是部分 OEM 安装器读不了第三方 `FileProvider` 的 content Uri。Android 10+ 先把 APK 以
+`IS_PENDING` 写进 `MediaStore.Downloads/Download/worm/`，写完再置为可见，用系统自己的 content Uri
+交给安装器；更老的系统或 MediaStore 不可用时回退到 `FileProvider`（authority `<applicationId>.updates`）。
+两种 Uri 都带 `FLAG_GRANT_READ_URI_PERMISSION` 和同 URI 的 `ClipData`，兼容从 ClipData 取授权的安装器。
+需要「安装未知来源应用」权限，并区分「设备上没有能打开 APK 的应用」与「安装器已返回结果」两种结局。
 
 ## 构建、版本与 CI
 
