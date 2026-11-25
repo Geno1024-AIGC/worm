@@ -3,6 +3,7 @@ package com.geno1024.ai.worm.android.ui.update
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.geno1024.ai.worm.android.update.ApkVerifier
 import com.geno1024.ai.worm.android.update.UpdatePrefs
 import com.geno1024.ai.worm.android.update.Updater
 import kotlinx.coroutines.Dispatchers
@@ -160,10 +161,21 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
             val sources = Updater.orderedSources(state.value.source, state.value.customPrefix)
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
-                    Updater.download(sources, release, target, release.apkSize) { done, total ->
-                        val size = if (total > 0) total else release.apkSize
-                        state.update { it.copy(downloadedBytes = done, totalBytes = size) }
-                    }
+                    Updater.download(
+                        sources = sources,
+                        release = release,
+                        target = target,
+                        expectedSize = release.apkSize,
+                        onProgress = { done, total ->
+                            val size = if (total > 0) total else release.apkSize
+                            state.update { it.copy(downloadedBytes = done, totalBytes = size) }
+                        },
+                        verify = { apk ->
+                            ApkVerifier.problem(app, apk, release)?.let { reason ->
+                                throw IllegalStateException(reason)
+                            }
+                        },
+                    )
                 }
             }
             outcome

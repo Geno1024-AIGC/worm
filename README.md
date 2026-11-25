@@ -118,9 +118,12 @@ CLI 的 `credentials.json`。首次安装需要分别登录。
 解析失败明确报「版本号无法识别」。已安装版本从 `PackageManager` 读；已忽略的版本仍可手动安装。
 
 下载源可选 GitHub / ghfast.top / gh-proxy.com / ghproxy.net，也可填自定义 prefix；选中的源优先，
-失败再依次回退其余源。APK 落到 `cacheDir/update/`，先写 `.part`、校验长度后原子改名，asset 名走白名单；
-通过 `FileProvider`（authority `<applicationId>.updates`）交给系统安装器。需要「安装未知来源应用」
-权限，并区分「设备上没有能打开 APK 的应用」与「安装器已返回结果」两种结局。
+失败再依次回退其余源。APK 落到 `cacheDir/update/`，先写 `.part`、校验长度与 ZIP 魔数后原子改名，asset 名走白名单。
+改完名还会用 `PackageManager.getPackageArchiveInfo()` 校验：文件能被系统解析、版本戳与本条 release 完全一致、
+同包名的已安装应用签名一致。任何一步失败都当作该下载源失败并自动换下一个，避免把镜像返回的网页或损坏文件
+交给系统安装器、只报一句「解析包时出现问题」。通过 `FileProvider`（authority `<applicationId>.updates`）
+交给系统安装器。需要「安装未知来源应用」权限，并区分「设备上没有能打开 APK 的应用」与
+「安装器已返回结果」两种结局。
 
 ## 构建、版本与 CI
 

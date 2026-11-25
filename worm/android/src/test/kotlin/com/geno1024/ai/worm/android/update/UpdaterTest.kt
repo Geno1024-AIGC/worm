@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.io.File
 
 /** Pure-parser tests: no network, no Android runtime. */
 class UpdaterTest {
@@ -132,6 +134,22 @@ class UpdaterTest {
         assertEquals("https://ok.example", Updater.sources("https://ok.example/").last().prefix)
         assertFalse(Updater.sources(null).any { it.id == "custom" })
         assertTrue(Updater.sources("https://ok.example").any { it.id == "custom" })
+    }
+
+    @Test
+    fun `a padded html page is not accepted as an apk`(@TempDir temp: File) {
+        val apk = File(temp, "update.apk")
+        apk.writeBytes(byteArrayOf('P'.code.toByte(), 'K'.code.toByte(), 3, 4, 0, 0))
+        assertTrue(Updater.looksLikeApk(apk))
+
+        val page = File(temp, "page.apk")
+        page.writeText("<html>" + " ".repeat(1024) + "</html>")
+        assertFalse(Updater.looksLikeApk(page))
+
+        val empty = File(temp, "empty.apk")
+        empty.writeBytes(byteArrayOf())
+        assertFalse(Updater.looksLikeApk(empty))
+        assertFalse(Updater.looksLikeApk(File(temp, "missing.apk")))
     }
 
     private fun release(env: Int, base: String = "0.1", pack: Int = 1, sha: String = "abcdef01") =

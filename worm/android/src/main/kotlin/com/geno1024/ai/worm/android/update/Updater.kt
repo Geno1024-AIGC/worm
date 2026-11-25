@@ -79,6 +79,22 @@ object Updater {
         val apkSize: Long,
     )
 
+    /** Mirrors can answer 200 with a padded HTML page of the right length; never trust that. */
+    fun looksLikeApk(file: File): Boolean = runCatching {
+        if (!file.isFile || file.length() <= 0) return false
+        file.inputStream().use { stream ->
+            val head = ByteArray(4)
+            var read = 0
+            while (read < head.size) {
+                val count = stream.read(head, read, head.size - read)
+                if (count <= 0) break
+                read += count
+            }
+            read == head.size && head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte() &&
+                head[2] == 3.toByte() && head[3] == 4.toByte()
+        }
+    }.getOrDefault(false)
+
     /** Asset names are appended to a URL, so they get a strict whitelist. */
     fun safeAssetName(name: String?): String? {
         if (name.isNullOrBlank() || name.length > 128) return null
@@ -136,30 +152,41 @@ object Updater {
     fun downloadUrl(source: Source, release: Release): String =
         "${source.prefix}/$OWNER/$REPO/releases/download/${release.tag}/${release.apkName}"
 
-    /** Tries the chosen source, then the presets; a failed mirror never leaves a partial APK. */
+    /**
+     * Tries the chosen source, then the presets; a failed mirror never leaves a partial APK.
+     * [verify] runs before a source is accepted, so a mirror serving plausible-looking bytes
+     * that are not this release's APK is treated like any other failed source.
+     */
     fun download(
         sources: List<Source>,
         release: Release,
         target: File,
         expectedSize: Long,
         onProgress: (Long, Long) -> Unit,
+        verify: (File) -> Unit = {},
     ): File {
         val urls = sources.map { downloadUrl(it, release) }.distinct()
-        var lastFailure: Exception? = null
+        val failures = mutableListOf<String>()
         for (url in urls) {
             try {
-                downloadOne(url, target, expectedSize, onProgress)
+                downloadOne(url, target, expectedSize, onProgress, verify)
                 return target
             } catch (e: Exception) {
-                lastFailure = e
+                failures += "${URL(url).host}: ${e.message ?: "未知原因"}"
                 File(target.parentFile, "${target.name}.part").delete()
                 if (target.exists()) target.delete()
             }
         }
-        throw IllegalStateException("所有下载源均失败：${lastFailure?.message ?: "未知原因"}")
+        throw IllegalStateException("所有下载源均失败：${failures.joinToString("；")}")
     }
 
-    private fun downloadOne(url: String, target: File, expectedSize: Long, onProgress: (Long, Long) -> Unit) {
+    private fun downloadOne(
+        url: String,
+        target: File,
+        expectedSize: Long,
+        onProgress: (Long, Long) -> Unit,
+        verify: (File) -> Unit,
+    ) {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 60_000
@@ -194,6 +221,10 @@ object Updater {
                 partial.copyTo(target, overwrite = true)
                 partial.delete()
             }
+            // A length match alone does not make a file an APK: some proxies answer
+            // with a padded page or a stale build of the same size.
+            check(looksLikeApk(target)) { "下载内容不是 APK 文件（${URL(url).host}）" }
+            verify(target)
         } finally {
             connection.disconnect()
             if (partial.exists()) partial.delete()
