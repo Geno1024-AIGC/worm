@@ -18,13 +18,34 @@ import java.io.InputStream
 /** A decode attempt with the actual reason when there is no bitmap to show. */
 data class DecodedImage(val bitmap: ImageBitmap?, val error: String? = null)
 
+/** Small bounded LRU: thumbnails are cheap, full-screen previews are not. */
+private class BitmapCache(private val limit: Int) {
+    private val cache = object : LinkedHashMap<String, ImageBitmap>(limit, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap>?): Boolean = size > limit
+    }
+
+    @Synchronized
+    fun get(key: String): ImageBitmap? = cache[key]
+
+    @Synchronized
+    fun put(key: String, bitmap: ImageBitmap) {
+        cache[key] = bitmap
+    }
+}
+
 /** Decodes downscaled previews off the main thread; a broken file reports why it failed. */
 object ThumbnailLoader {
+    private val thumbnails = BitmapCache(200)
+    private val previews = BitmapCache(4)
+
     suspend fun load(context: Context, media: LocalMedia, maxDimension: Int): ImageBitmap? =
         loadDetailed(context, media, maxDimension).bitmap
 
-    suspend fun loadDetailed(context: Context, media: LocalMedia, maxDimension: Int): DecodedImage =
-        withContext(Dispatchers.IO) {
+    suspend fun loadDetailed(context: Context, media: LocalMedia, maxDimension: Int): DecodedImage {
+        val cache = if (maxDimension <= 256) thumbnails else previews
+        val key = "${media.id}|${media.modifiedAt ?: -1}|$maxDimension"
+        cache.get(key)?.let { return DecodedImage(it) }
+        val result = withContext(Dispatchers.IO) {
             runCatching {
                 when (media.kind) {
                     MediaKind.IMAGE -> decodeImage(context, media, maxDimension)
@@ -32,6 +53,9 @@ object ThumbnailLoader {
                 }
             }.getOrElse { DecodedImage(null, "${media.name}：${it.javaClass.simpleName}${it.message?.let { m -> ": $m" } ?: ""}") }
         }
+        result.bitmap?.let { cache.put(key, it) }
+        return result
+    }
 
     private fun decodeImage(context: Context, media: LocalMedia, maxDimension: Int): DecodedImage {
         val textProblem = textResponse(context, media)
