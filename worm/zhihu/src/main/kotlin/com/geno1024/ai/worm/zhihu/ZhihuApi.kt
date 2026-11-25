@@ -59,14 +59,20 @@ private val COVER_KEYS = listOf("cover", "cover_url", "coverUrl", "image_url", "
 private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "m4v", "webm", "flv")
 
 /** Pure parse of a zhihu-api list response. Errors are surfaced, never silently treated as "no data". */
-fun parseZhihuListPage(body: String, kind: ZhihuKind, referer: String, offset: Int = 0): ZhihuListPage {
+fun parseZhihuListPage(
+    body: String,
+    kind: ZhihuKind,
+    referer: String,
+    offset: Int = 0,
+    upgradeImages: Boolean = false,
+): ZhihuListPage {
     val root = Jsonp.objectOrNull(body)
         ?: return ZhihuListPage(emptyList(), null, responseProblem(body))
     val error = root.optStringOf("error", "message")?.takeIf { root.opt("data") == null && root.optInt("code") != 0 }
     if (error != null) return ZhihuListPage(emptyList(), null, error)
 
     val data = root.optArrayOf("data") ?: return ZhihuListPage(emptyList(), null, null)
-    val contents = data.objects().mapNotNull { extractZhihuContent(it, kind, referer) }
+    val contents = data.objects().mapNotNull { extractZhihuContent(it, kind, referer, upgradeImages) }
 
     val paging = root.optObjectOf("paging")
     val next = when {
@@ -86,7 +92,12 @@ private fun parseOffset(next: String?): Int? {
 }
 
 /** Pure conversion of one API item (or an activity wrapper) into a common content record. */
-fun extractZhihuContent(item: JSONObject, fallbackKind: ZhihuKind, referer: String): ZhihuContent? {
+fun extractZhihuContent(
+    item: JSONObject,
+    fallbackKind: ZhihuKind,
+    referer: String,
+    upgradeImages: Boolean = false,
+): ZhihuContent? {
     val target = item.optObjectOf("target", "object") ?: item
     val id = target.optStringOf("id", "answer_id", "article_id", "content_id")
         ?: item.optStringOf("id", "answer_id", "article_id")
@@ -138,6 +149,9 @@ fun extractZhihuContent(item: JSONObject, fallbackKind: ZhihuKind, referer: Stri
             referer = referer,
             extension = MediaFiles.extensionOf(absolute, mediaKind),
             isCover = cover || previous?.isCover == true,
+            fallbackUrls = if (upgradeImages && mediaKind == MediaKind.IMAGE &&
+                ZhihuMedia.rank(absolute) <= 10
+            ) ZhihuMedia.upgradeCandidates(absolute) else emptyList(),
         )
     }
 

@@ -101,6 +101,7 @@ class ResumeQueue(private val file: File) {
             put("isCover", isCover)
             put("relativeDir", relativeDir)
             suggestedName?.let { put("suggestedName", it) }
+            if (fallbackUrls.isNotEmpty()) put("fallbackUrls", JSONArray().apply { fallbackUrls.forEach { put(it) } })
         }
 
         fun JSONObject.toAsset() = MediaAsset(
@@ -115,6 +116,9 @@ class ResumeQueue(private val file: File) {
             relativeDir = optString("relativeDir").takeIf { it.isNotBlank() }
                 ?: MediaKind.valueOf(getString("kind")).folder,
             suggestedName = optStringOrNull("suggestedName"),
+            fallbackUrls = optJSONArray("fallbackUrls")?.let { array ->
+                (0 until array.length()).mapNotNull { array.optString(it, null)?.takeIf { url -> url.isNotBlank() } }
+            }.orEmpty(),
         )
 
         fun JSONObject.optStringOrNull(key: String): String? =

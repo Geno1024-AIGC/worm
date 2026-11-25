@@ -21,6 +21,23 @@ object ZhihuMedia {
         return SIZE_SUFFIX.replace(name.substringBeforeLast('.'), "").lowercase()
     }
 
+    /**
+     * When a page only exposes `_r`, try larger variants on the SAME host/path. These
+     * are candidates, not saved files: a 404 simply falls back to the original URL.
+     */
+    fun upgradeCandidates(url: String): List<String> {
+        val clean = url.substringBefore('?').substringBefore('#')
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) return emptyList()
+        val name = clean.substringAfterLast('/')
+        val stem = name.substringBeforeLast('.')
+        if (!SIZE_SUFFIX.containsMatchIn(stem)) return emptyList()
+        val base = SIZE_SUFFIX.replace(stem, "")
+        val extension = name.substringAfterLast('.', "jpg").ifBlank { "jpg" }
+        val prefix = clean.substringBeforeLast('/') + "/"
+        val query = url.substringAfter('?', "").takeIf { url.contains('?') }?.let { "?$it" }.orEmpty()
+        return listOf("1440w", "1080w", "720w").map { "$prefix${base}_$it.$extension$query" }
+    }
+
     /** Higher means larger. A URL without a size suffix is the original. */
     fun rank(url: String): Int {
         val name = url.substringBefore('?').substringBefore('#').substringAfterLast('/')

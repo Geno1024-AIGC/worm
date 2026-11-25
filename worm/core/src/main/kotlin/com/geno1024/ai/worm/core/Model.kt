@@ -24,6 +24,8 @@ data class MediaAsset(
     val isCover: Boolean = false,
     val relativeDir: String = kind.folder,
     val suggestedName: String? = null,
+    /** Tried in order only when the primary URL fails; the saved file keeps the primary identity. */
+    val fallbackUrls: List<String> = emptyList(),
 )
 
 /** One collected record. Text is present now for API stability; media is collected first. */

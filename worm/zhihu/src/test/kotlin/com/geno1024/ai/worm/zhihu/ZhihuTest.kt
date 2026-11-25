@@ -95,6 +95,20 @@ class ZhihuTest {
     }
 
     @Test
+    fun `thumbnail upgrade candidates keep host and query`() {
+        val small = "https://picx.zhimg.com/v2-abc_r.jpg?source=c8b7c179"
+        assertEquals(
+            listOf(
+                "https://picx.zhimg.com/v2-abc_1440w.jpg?source=c8b7c179",
+                "https://picx.zhimg.com/v2-abc_1080w.jpg?source=c8b7c179",
+                "https://picx.zhimg.com/v2-abc_720w.jpg?source=c8b7c179",
+            ),
+            ZhihuMedia.upgradeCandidates(small),
+        )
+        assertTrue(ZhihuMedia.upgradeCandidates("https://picx.zhimg.com/v2-abc.jpg").isEmpty())
+    }
+
+    @Test
     fun `incremental watermark skips posts already covered`(@TempDir temp: File) = runBlocking {
         assertEquals(
             1_700_000_000L,

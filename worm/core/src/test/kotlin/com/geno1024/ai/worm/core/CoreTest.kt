@@ -201,6 +201,35 @@ class CoreTest {
     }
 
     @Test
+    fun `fallback url is used when the primary download fails`(@TempDir temp: File) {
+        val primary = "https://example.com/thumb_r.jpg"
+        val fallback = "https://example.com/thumb_720w.jpg"
+        val asset = MediaAsset(primary, MediaKind.IMAGE, fallbackUrls = listOf(fallback))
+        val tried = mutableListOf<String>()
+        val http = object : HttpPortal {
+            override fun get(url: String, session: CrawlSession, referer: String?, extraHeaders: Map<String, String>) =
+                HttpResponse(200, "", url)
+
+            override fun download(
+                url: String,
+                session: CrawlSession,
+                referer: String?,
+                target: File,
+                onBytes: (Long, Long?) -> Unit,
+            ): File {
+                tried += url
+                if (url == primary) throw java.io.IOException("boom")
+                target.writeBytes("x".toByteArray())
+                return target
+            }
+        }
+        val saved = MediaDownloader(http, File(temp, "cache"), delayMs = 0)
+            .download(asset, CrawlSession(emptyMap()), DirectoryMediaSink(File(temp, "media")))
+        assertTrue(saved != null)
+        assertEquals(listOf(primary, fallback), tried)
+    }
+
+    @Test
     fun `resume queue roundtrips assets and drops settled ones`(@TempDir temp: File) {
         val queue = ResumeQueue(File(temp, "state/resume-queue.json"))
         val assets = listOf(

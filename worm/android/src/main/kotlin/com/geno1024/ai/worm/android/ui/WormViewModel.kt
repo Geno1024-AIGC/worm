@@ -66,6 +66,7 @@ data class UiState(
     val error: String? = null,
     val lastRun: String? = null,
     val forceAll: Boolean = false,
+    val upgradeZhihuImages: Boolean = false,
 ) {
     val cookies: Map<String, String>
         get() = when (source.site) {
@@ -199,12 +200,15 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
                 error = null,
                 lastRun = null,
                 forceAll = false,
+                upgradeZhihuImages = false,
             )
         }
         refreshLastRun()
     }
 
     fun setForceAll(value: Boolean) = _state.update { it.copy(forceAll = value) }
+
+    fun setUpgradeZhihuImages(value: Boolean) = _state.update { it.copy(upgradeZhihuImages = value) }
 
     fun updateSubject(value: String) {
         _state.update { it.copy(subject = value) }
@@ -384,7 +388,10 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
                 maxPagesPerAlbum = cap,
                 albumFilter = state.albumFilter.trim().ifBlank { null },
             )
-            Source.ZHIHU -> ZhihuCrawler(http, cacheDir, maxPagesPerKind = cap)
+            Source.ZHIHU -> ZhihuCrawler(
+                http, cacheDir, maxPagesPerKind = cap,
+                upgradeImages = state.upgradeZhihuImages,
+            )
         }
     }
 

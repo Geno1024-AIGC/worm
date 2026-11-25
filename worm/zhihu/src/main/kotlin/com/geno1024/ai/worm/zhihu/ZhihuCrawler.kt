@@ -28,6 +28,7 @@ class ZhihuCrawler(
     private val kinds: Set<ZhihuKind> = ZhihuKind.entries.toSet(),
     private val pageSize: Int = 20,
     private val maxPagesPerKind: Int = 50,
+    private val upgradeImages: Boolean = false,
     downloadDelayMs: Long = 300L,
 ) : Crawler {
     private val downloader = MediaDownloader(http, cacheDir, downloadDelayMs)
@@ -60,13 +61,13 @@ class ZhihuCrawler(
                 val url = buildZhihuListUrl(token, kind, offset, pageSize)
                 var response = http.get(url, session, REFERER, API_HEADERS)
                 if (!usable(response, kind, warnings)) break
-                var parsed = parseZhihuListPage(response.body, kind, REFERER, offset)
+                var parsed = parseZhihuListPage(response.body, kind, REFERER, offset, upgradeImages)
                 // A chunked/truncated body can slip past the HTTP Content-Length check.
                 // Re-fetch once before turning a transient cut-off into a crawl failure.
                 if (parsed.error?.contains("响应被截断") == true) {
                     response = http.get(url, session, REFERER, API_HEADERS)
                     if (!usable(response, kind, warnings)) break
-                    parsed = parseZhihuListPage(response.body, kind, REFERER, offset)
+                    parsed = parseZhihuListPage(response.body, kind, REFERER, offset, upgradeImages)
                 }
                 if (parsed.error != null) {
                     warnings += "知乎 ${kind.name}: ${parsed.error}"

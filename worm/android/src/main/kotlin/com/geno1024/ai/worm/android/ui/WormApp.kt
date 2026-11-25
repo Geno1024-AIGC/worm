@@ -215,6 +215,16 @@ fun WormApp() {
                         )
                         Text("强制爬全部（忽略上次抓取时间）")
                     }
+                    if (ui.source == Source.ZHIHU) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = ui.upgradeZhihuImages,
+                                onCheckedChange = viewModel::setUpgradeZhihuImages,
+                                enabled = !ui.running,
+                            )
+                            Text("知乎只给缩略图时尝试大图（失败回退原图）")
+                        }
+                    }
 
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

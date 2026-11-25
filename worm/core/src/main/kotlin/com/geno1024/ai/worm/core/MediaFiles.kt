@@ -142,17 +142,23 @@ class MediaDownloader(
     ): SavedMedia? {
         if (sink.exists(asset)) return null
         cacheDir.mkdirs()
-        val temp = File(cacheDir, "download-${asset.url.hashCode().toUInt().toString(16)}.part")
-        try {
-            http.download(asset.url, session, asset.referer, temp, onBytes)
-            MediaFiles.textResponseProblem(temp)?.let { problem ->
-                throw CrawlException("下载失败 ${asset.url}：$problem")
+        var lastError: Exception? = null
+        for ((index, url) in (listOf(asset.url) + asset.fallbackUrls).withIndex()) {
+            val temp = File(cacheDir, "download-${url.hashCode().toUInt().toString(16)}-$index.part")
+            try {
+                http.download(url, session, asset.referer, temp, onBytes)
+                MediaFiles.textResponseProblem(temp)?.let { problem ->
+                    throw CrawlException("下载失败 $url：$problem")
+                }
+                if (delayMs > 0) Thread.sleep(delayMs)
+                return sink.accept(asset, temp)
+            } catch (e: Exception) {
+                lastError = e
+            } finally {
+                if (temp.exists()) temp.delete()
             }
-            if (delayMs > 0) Thread.sleep(delayMs)
-            return sink.accept(asset, temp)
-        } finally {
-            if (temp.exists()) temp.delete()
         }
+        throw lastError ?: CrawlException("下载失败 ${asset.url}")
     }
 
     /**
