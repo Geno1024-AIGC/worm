@@ -204,7 +204,14 @@ private fun MediaTile(media: LocalMedia, onClick: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+            modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 4.dp),
+        )
+        Text(
+            formatMediaTime(media.modifiedAt),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 6.dp, end = 6.dp, bottom = 4.dp),
         )
     }
 }
@@ -236,6 +243,27 @@ private fun ImagePreview(media: LocalMedia, onClose: () -> Unit) {
                             },
                     )
                 } ?: CircularProgressIndicator(Modifier.align(Alignment.Center))
+                Surface(
+                    color = Color.Black.copy(alpha = 0.55f),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp),
+                ) {
+                    Column(Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                        Text(
+                            media.name,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "文件时间：${formatMediaTimeDetail(media.modifiedAt)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                        )
+                    }
+                }
                 IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)) {
                     Icon(Icons.Default.Close, contentDescription = "关闭", tint = Color.White)
                 }

@@ -9,6 +9,10 @@ import com.geno1024.ai.worm.core.MediaKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /** A saved file as shown by the browser. [path] is the stable id and breadcrumb key. */
 data class LocalMedia(
@@ -17,9 +21,23 @@ data class LocalMedia(
     val kind: MediaKind,
     val file: File? = null,
     val uri: Uri? = null,
+    /** File mtime in milliseconds, set to the post's publish time when the crawler knew it. */
+    val modifiedAt: Long? = null,
 ) {
     val id: String get() = path
 }
+
+private val TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+private val TIME_DETAIL_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+
+fun formatMediaTime(epochMillis: Long?): String = formatMediaTime(epochMillis, TIME_FORMAT)
+
+fun formatMediaTimeDetail(epochMillis: Long?): String = formatMediaTime(epochMillis, TIME_DETAIL_FORMAT)
+
+private fun formatMediaTime(epochMillis: Long?, formatter: DateTimeFormatter): String =
+    epochMillis?.takeIf { it > 0 }?.let {
+        formatter.format(LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault()))
+    } ?: "时间未知"
 
 data class DirectoryListing(
     val path: String,
@@ -56,7 +74,13 @@ class MediaLibrary(
             media = files.filter { it.isFile() }.mapNotNull { document ->
                 val name = document.name ?: return@mapNotNull null
                 val kind = MediaFiles.kindOf(name) ?: return@mapNotNull null
-                LocalMedia(childFolder(folder, name), name, kind, uri = document.uri)
+                LocalMedia(
+                    path = childFolder(folder, name),
+                    name = name,
+                    kind = kind,
+                    uri = document.uri,
+                    modifiedAt = document.lastModified().takeIf { it > 0 },
+                )
             }.sortedBy { it.name },
         )
     }
@@ -71,7 +95,13 @@ class MediaLibrary(
             directories = files.filter { it.isDirectory() }.map { it.name }.sorted(),
             media = files.filter { it.isFile() }.mapNotNull { file ->
                 val kind = MediaFiles.kindOf(file.name) ?: return@mapNotNull null
-                LocalMedia(childFolder(folder, file.name), file.name, kind, file = file)
+                LocalMedia(
+                    path = childFolder(folder, file.name),
+                    name = file.name,
+                    kind = kind,
+                    file = file,
+                    modifiedAt = file.lastModified().takeIf { it > 0 },
+                )
             }.sortedBy { it.name },
         )
     }
