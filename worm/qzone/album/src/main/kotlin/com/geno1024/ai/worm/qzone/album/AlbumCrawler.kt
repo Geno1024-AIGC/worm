@@ -10,11 +10,14 @@ import com.geno1024.ai.worm.core.Crawler
 import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.HttpPortal
 import com.geno1024.ai.worm.core.JdkHttpPortal
+import com.geno1024.ai.worm.core.isBeforeWatermark
 import com.geno1024.ai.worm.core.MediaDownloader
 import com.geno1024.ai.worm.core.MediaFiles
 import com.geno1024.ai.worm.core.MediaSink
 import com.geno1024.ai.worm.core.objects
+import com.geno1024.ai.worm.core.optLongOf
 import com.geno1024.ai.worm.core.pageCountOf
+import com.geno1024.ai.worm.core.reachedWatermark
 import com.geno1024.ai.worm.core.qzone.QzoneAlbum
 import com.geno1024.ai.worm.core.qzone.buildAlbumListUrl
 import com.geno1024.ai.worm.core.qzone.buildPhotoListUrl
@@ -64,6 +67,8 @@ class AlbumCrawler(
         val items = mutableListOf<CollectedItem>()
         val warnings = mutableListOf<String>()
         val seen = HashSet<String>()
+        val since = request.since
+        var newestAt = 0L
 
         // Phase 1a: page through the album list. mode=3 is required to get every
         // album, not just the recent ones, and pageStart/pageNum control the window.
@@ -141,12 +146,18 @@ class AlbumCrawler(
                 // One folder per album, under the target QQ. Images and videos stay
                 // together because their extensions already tell them apart.
                 val relativeDir = "qzone/$targetUin/${MediaFiles.sanitize(album.name)}"
+                val pageTimes = mutableListOf<Long?>()
                 for (photo in photos) {
+                    val time = photo.optLongOf("uploadtime", "uploadTime", "rawshoottime", "shotTime")
+                    pageTimes += time
+                    time?.let { if (it > newestAt) newestAt = it }
+                    if (isBeforeWatermark(time, since)) continue
                     for (asset in extractAlbumPhotoMedia(photo, relativeDir)) {
                         if (seen.add("${asset.kind.name}:${asset.url}")) items += CollectedItem.Media(asset)
                     }
                 }
 
+                if (reachedWatermark(pageTimes, since)) break
                 val next = photoPage.nextPageStart ?: (start + photoPage.totalInPage)
                 if (next <= start) break
                 start = next
@@ -170,6 +181,9 @@ class AlbumCrawler(
             onFailure = { asset, error -> warnings += "下载失败 ${asset.url}: ${error.message}" },
             onDone = { asset -> listener.onAssetDone(asset) },
         )
-        return CrawlReport(id, targetUin, items, saved, warnings)
+        return CrawlReport(
+            id, targetUin, items, saved, warnings,
+            newestItemAt = newestAt.takeIf { it > 0 },
+        )
     }
 }

@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -32,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -207,6 +209,12 @@ fun WormApp() {
                         )
                     }
 
+                    ui.lastRun?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    Text(
+                        "增量抓取只翻上次成功之后的新内容；强制更新会重翻所有页（已存在文件仍跳过）。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("登录态：${if (ui.loginReady) "已就绪" else "未登录"}")
@@ -230,13 +238,25 @@ fun WormApp() {
                         }
                     }
 
-                    Button(
-                        onClick = { viewModel.start() },
-                        enabled = !ui.running,
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        if (!ui.running) Icon(Icons.Default.PlayArrow, contentDescription = null)
-                        Text(if (ui.running) "抓取中…" else "开始抓取")
+                        Button(
+                            onClick = { viewModel.start() },
+                            enabled = !ui.running,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            if (!ui.running) Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Text(if (ui.running) "抓取中…" else "增量抓取")
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.start(force = true) },
+                            enabled = !ui.running,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("强制更新")
+                        }
                     }
 
                     ui.progress?.let { progress ->

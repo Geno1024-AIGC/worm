@@ -107,6 +107,35 @@ class CoreTest {
     }
 
     @Test
+    fun `crawl journal round trips per-target watermarks`() {
+        val zhihu = CrawlStamp("zhihu.user", "alice", 1_700_000_000L, 1_699_999_900L)
+        val qzone = CrawlStamp("qzone", "12345", 1_600_000_000L)
+        val body = serializeCrawlJournal(
+            mapOf(
+                crawlKey(zhihu.crawlerId, zhihu.subject) to zhihu,
+                crawlKey(qzone.crawlerId, qzone.subject) to qzone,
+            ),
+        )
+        val parsed = parseCrawlJournal(body)
+        assertEquals(zhihu, parsed[crawlKey("zhihu.user", "alice")])
+        assertEquals(qzone, parsed[crawlKey("qzone", "12345")])
+        assertEquals(emptyMap<String, CrawlStamp>(), parseCrawlJournal("{broken"))
+        assertEquals(zhihu.lastSuccessAt - INCREMENTAL_OVERLAP_SEC, sinceOf(zhihu))
+        assertNull(sinceOf(null))
+    }
+
+    @Test
+    fun `watermark only stops pages whose every item is old`() {
+        val since = 1000L
+        assertTrue(reachedWatermark(listOf(900L, 800L), since))
+        assertFalse(reachedWatermark(listOf(900L, null), since))
+        assertFalse(reachedWatermark(emptyList(), since))
+        assertTrue(isBeforeWatermark(999L, since))
+        assertFalse(isBeforeWatermark(1000L, since))
+        assertFalse(isBeforeWatermark(null, since))
+    }
+
+    @Test
     fun `text error pages are rejected before they are saved as media`(@TempDir temp: File) {
         val svg = File(temp, "placeholder.jpg")
         svg.writeText("""<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40"></svg>""")

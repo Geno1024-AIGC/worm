@@ -58,6 +58,8 @@ data class CrawlSession(
 data class CrawlRequest(
     val subject: String,
     val includeText: Boolean = false,
+    /** Epoch seconds; content older than this was already covered by a prior run. */
+    val since: Long? = null,
 )
 
 data class SavedMedia(
@@ -73,6 +75,8 @@ data class CrawlReport(
     val items: List<CollectedItem>,
     val saved: List<SavedMedia>,
     val warnings: List<String> = emptyList(),
+    /** Newest content timestamp seen, so the next run can show how fresh the target is. */
+    val newestItemAt: Long? = null,
 )
 
 /**

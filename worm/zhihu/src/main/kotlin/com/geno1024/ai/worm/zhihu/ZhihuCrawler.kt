@@ -10,9 +10,11 @@ import com.geno1024.ai.worm.core.Crawler
 import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.HttpPortal
 import com.geno1024.ai.worm.core.JdkHttpPortal
+import com.geno1024.ai.worm.core.isBeforeWatermark
 import com.geno1024.ai.worm.core.MediaDownloader
 import com.geno1024.ai.worm.core.MediaKind
 import com.geno1024.ai.worm.core.MediaSink
+import com.geno1024.ai.worm.core.reachedWatermark
 import java.io.File
 
 private const val REFERER = "https://www.zhihu.com/"
@@ -44,6 +46,8 @@ class ZhihuCrawler(
         val items = mutableListOf<CollectedItem>()
         val warnings = mutableListOf<String>()
         val seen = HashSet<String>()
+        val since = request.since
+        var newestAt = 0L
         if (session.cookies.isEmpty()) warnings += "未提供知乎 Cookie：接口可能返回 401/403（需要登录）"
 
         // Phase 1: paginate through each content kind, recording media without downloading.
@@ -73,7 +77,11 @@ class ZhihuCrawler(
                 }
                 if (parsed.contents.isEmpty()) break
 
+                val pageTimes = mutableListOf<Long?>()
                 for (content in parsed.contents) {
+                    pageTimes += content.createdAt
+                    content.createdAt?.let { if (it > newestAt) newestAt = it }
+                    if (isBeforeWatermark(content.createdAt, since)) continue
                     for (asset in content.media) {
                         val folder = if (asset.kind == MediaKind.IMAGE) "image" else "video"
                         val placed = asset.copy(relativeDir = "zhihu/$token/$folder")
@@ -89,6 +97,7 @@ class ZhihuCrawler(
                     }
                 }
 
+                if (reachedWatermark(pageTimes, since)) break
                 val next = parsed.nextOffset
                 if (next == null || next <= offset) break
                 offset = next
@@ -109,6 +118,9 @@ class ZhihuCrawler(
             onFailure = { asset, error -> warnings += "下载失败 ${asset.url}: ${error.message}" },
             onDone = { asset -> listener.onAssetDone(asset) },
         )
-        return CrawlReport(id, token, items, saved, warnings)
+        return CrawlReport(
+            id, token, items, saved, warnings,
+            newestItemAt = newestAt.takeIf { it > 0 },
+        )
     }
 }

@@ -59,8 +59,27 @@ class ZhihuTest {
         val svg = """<svg xmlns="http://www.w3.org/2000/svg"><text>captcha</text></svg>"""
         val page = parseZhihuListPage(svg, ZhihuKind.ANSWER, "https://www.zhihu.com/")
         assertTrue(page.contents.isEmpty())
-        assertTrue(page.error!!.contains("SVG"))
-        assertFalse(page.error!!.contains("illegal character"))
+        val error = page.error ?: error("expected a readable SVG warning")
+        assertTrue(error.contains("SVG"))
+        assertFalse(error.contains("illegal character"))
+    }
+
+    @Test
+    fun `incremental watermark skips posts already covered`(@TempDir temp: File) = runBlocking {
+        assertEquals(
+            1_700_000_000L,
+            parseZhihuListPage(body, ZhihuKind.ANSWER, "").contents.single().media.first().createdAt,
+        )
+        val crawler = ZhihuCrawler(
+            FakeHttp(200, body), File(temp, "cache"),
+            kinds = setOf(ZhihuKind.ANSWER), downloadDelayMs = 0,
+        )
+        val report = crawler.collect(
+            CrawlRequest("geno", since = 1_800_000_000L),
+            CrawlSession(mapOf("z_c0" to "token")),
+            DirectoryMediaSink(File(temp, "media")),
+        )
+        assertTrue(report.items.isEmpty())
     }
 
     @Test

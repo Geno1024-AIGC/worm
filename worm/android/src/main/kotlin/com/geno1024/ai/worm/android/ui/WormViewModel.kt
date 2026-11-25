@@ -14,9 +14,11 @@ import com.geno1024.ai.worm.android.site.SiteCookies
 import com.geno1024.ai.worm.android.site.Source
 import com.geno1024.ai.worm.android.storage.SafMediaSink
 import com.geno1024.ai.worm.android.storage.createMediaSink
+import com.geno1024.ai.worm.core.CrawlJournal
 import com.geno1024.ai.worm.core.CrawlListener
 import com.geno1024.ai.worm.core.CrawlProgress
 import com.geno1024.ai.worm.core.CrawlRequest
+import com.geno1024.ai.worm.core.CrawlStamp
 import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.Crawler
 import com.geno1024.ai.worm.core.DirectoryMediaSink
@@ -27,6 +29,7 @@ import com.geno1024.ai.worm.core.MediaSink
 import com.geno1024.ai.worm.core.ResumeQueue
 import com.geno1024.ai.worm.core.ResumeRunner
 import com.geno1024.ai.worm.core.pageCapOf
+import com.geno1024.ai.worm.core.sinceOf
 import com.geno1024.ai.worm.core.qzone.requireQzoneAuth
 import com.geno1024.ai.worm.qzone.album.AlbumCrawler
 import com.geno1024.ai.worm.qzone.shuoshuo.ShuoshuoCrawler
@@ -38,6 +41,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Collections
 
 data class UiState(
@@ -55,6 +62,7 @@ data class UiState(
     val result: String? = null,
     val resume: String? = null,
     val error: String? = null,
+    val lastRun: String? = null,
 ) {
     val cookies: Map<String, String>
         get() = when (source.site) {
@@ -72,9 +80,11 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
     val state: StateFlow<UiState> = _state.asStateFlow()
     private var sink: MediaSink = createMediaSink(app, storedTreeUri)
     private val queue = ResumeQueue(File(app.filesDir, "worm/resume-queue.json"))
+    private val journal = CrawlJournal(File(app.filesDir, "worm/crawl-journal.json"))
 
     init {
         refreshCookies()
+        refreshLastRun()
         resumePending()
     }
 
@@ -143,12 +153,32 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private fun refreshLastRun() {
+        val current = _state.value
+        val stamp = journal.lastSuccess(crawlerIdFor(current.source), current.subject.trim())
+        _state.update {
+            it.copy(lastRun = stamp?.let { s -> "上次成功抓取：${formatTime(s.lastSuccessAt)}" })
+        }
+    }
+
+    private fun crawlerIdFor(source: Source): String = when (source) {
+        Source.QZONE -> "qzone"
+        Source.QZONE_ALBUM -> "qzone/album"
+        Source.ZHIHU -> "zhihu.user"
+    }
+
+    private fun formatTime(epochSeconds: Long): String =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+            .format(LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneId.systemDefault()))
+
     fun selectSource(source: Source) {
         _state.update { it.copy(source = source, result = null, error = null) }
+        refreshLastRun()
     }
 
     fun updateSubject(value: String) {
         _state.update { it.copy(subject = value) }
+        refreshLastRun()
     }
 
     fun updatePageLimit(value: String) {
@@ -183,7 +213,8 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun start() {
+    /** [force] ignores the saved watermark and replays every page (existing files are still skipped). */
+    fun start(force: Boolean = false) {
         if (_state.value.running) return
         viewModelScope.launch(Dispatchers.IO) {
             _state.update {
@@ -195,14 +226,21 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
                 val http = httpPortal()
                 val crawler = crawlerFor(current, http, File(app.cacheDir, "downloads"))
                 val displayName = crawler.displayName
+                val subject = current.subject.trim()
+                val stamp = if (force) null else journal.lastSuccess(crawler.id, subject)
+                val since = sinceOf(stamp)
                 val liveWarnings = Collections.synchronizedList(mutableListOf<String>())
-                val listener = appListener(crawler.id, current.subject.trim(), liveWarnings)
+                val listener = appListener(crawler.id, subject, liveWarnings)
                 val report = crawler.collect(
-                    CrawlRequest(current.subject.trim()),
+                    CrawlRequest(subject, since = since),
                     session,
                     sink,
                     listener,
                 )
+                journal.record(
+                    CrawlStamp(crawler.id, subject, System.currentTimeMillis() / 1000, report.newestItemAt),
+                )
+                refreshLastRun()
                 queue.clear()
                 val fresh = report.saved.count { !it.existed }
                 val existing = report.saved.count { it.existed }
@@ -210,8 +248,8 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
                 _state.update {
                     it.copy(
                         running = false,
-                        result = "$displayName：发现 ${report.items.size} 项，新下载 $fresh 项，" +
-                            "已存在 $existing 项，跳过 ${report.items.size - report.saved.size} 项",
+                        result = "${if (since == null) "全量" else "增量"}抓取 $displayName：发现 ${report.items.size} 项，" +
+                            "新下载 $fresh 项，已存在 $existing 项，跳过 ${report.items.size - report.saved.size} 项",
                         warnings = warnings,
                     )
                 }

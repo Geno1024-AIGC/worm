@@ -124,6 +124,7 @@ fun extractZhihuContent(item: JSONObject, fallbackKind: ZhihuKind, referer: Stri
             id = id,
             suggestedName = id?.let { "$it-${++counter}" },
             title = title,
+            // Needed by incremental crawls: media inherits its post's publish time.
             createdAt = created,
             referer = referer,
             extension = MediaFiles.extensionOf(absolute, mediaKind),

@@ -10,6 +10,7 @@ import com.geno1024.ai.worm.core.Crawler
 import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.HttpPortal
 import com.geno1024.ai.worm.core.HtmlMedia
+import com.geno1024.ai.worm.core.isBeforeWatermark
 import com.geno1024.ai.worm.core.JdkHttpPortal
 import com.geno1024.ai.worm.core.MediaAsset
 import com.geno1024.ai.worm.core.MediaDownloader
@@ -18,6 +19,7 @@ import com.geno1024.ai.worm.core.optLongOf
 import com.geno1024.ai.worm.core.optStringOf
 import com.geno1024.ai.worm.core.objects
 import com.geno1024.ai.worm.core.pageCountOf
+import com.geno1024.ai.worm.core.reachedWatermark
 import com.geno1024.ai.worm.core.qzone.buildMsgListUrl
 import com.geno1024.ai.worm.core.qzone.extractMessageMedia
 import com.geno1024.ai.worm.core.qzone.isAuthError
@@ -57,6 +59,8 @@ class ShuoshuoCrawler(
         val items = mutableListOf<CollectedItem>()
         val warnings = mutableListOf<String>()
         val seen = HashSet<String>()
+        val since = request.since
+        var newestAt = 0L
         var pos = 0
         var page = 0
 
@@ -80,9 +84,13 @@ class ShuoshuoCrawler(
             val messages = parsed.messages.objects()
             if (messages.isEmpty()) break
 
+            val pageTimes = mutableListOf<Long?>()
             for (message in messages) {
                 val content = message.optStringOf("content", "contenttext")
                 val time = message.optLongOf("created_time", "time")
+                pageTimes += time
+                time?.let { if (it > newestAt) newestAt = it }
+                if (isBeforeWatermark(time, since)) continue
                 val assets = linkedMapOf<String, MediaAsset>()
                 extractMessageMedia(message).forEach { assets.putIfAbsent("${it.kind.name}:${it.url}", it) }
                 if (!content.isNullOrBlank()) {
@@ -106,6 +114,7 @@ class ShuoshuoCrawler(
                 }
             }
 
+            if (reachedWatermark(pageTimes, since)) break
             if (!parsed.hasMore) break
             if (messages.size < PAGE_SIZE) break
             val total = parsed.total
@@ -127,6 +136,9 @@ class ShuoshuoCrawler(
             onFailure = { asset, error -> warnings += "下载失败 ${asset.url}: ${error.message}" },
             onDone = { asset -> listener.onAssetDone(asset) },
         )
-        return CrawlReport(id, targetUin, items, saved, warnings)
+        return CrawlReport(
+            id, targetUin, items, saved, warnings,
+            newestItemAt = newestAt.takeIf { it > 0 },
+        )
     }
 }
