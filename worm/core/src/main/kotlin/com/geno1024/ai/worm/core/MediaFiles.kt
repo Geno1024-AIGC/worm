@@ -67,6 +67,29 @@ object MediaFiles {
             Files.move(part.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
+
+    /**
+     * Rejects an error page saved under a media extension. Zhihu's lazy-load SVG
+     * placeholders and CDN/403 HTML both start with markup; neither is decodable
+     * as an image and both used to be silently stored as `.jpg`.
+     */
+    fun textResponseProblem(file: File): String? {
+        val head = ByteArray(32)
+        val read = file.inputStream().use { input ->
+            var total = 0
+            while (total < head.size) {
+                val count = input.read(head, total, head.size - total)
+                if (count < 0) break
+                total += count
+            }
+            total
+        }
+        return when (head.copyOf(read).toString(Charsets.ISO_8859_1).trimStart().firstOrNull()) {
+            '<' -> "响应是 SVG/HTML 文本，不是媒体文件"
+            '{' -> "响应是 JSON 文本，不是媒体文件"
+            else -> null
+        }
+    }
 }
 
 /**
@@ -122,6 +145,9 @@ class MediaDownloader(
         val temp = File(cacheDir, "download-${asset.url.hashCode().toUInt().toString(16)}.part")
         try {
             http.download(asset.url, session, asset.referer, temp, onBytes)
+            MediaFiles.textResponseProblem(temp)?.let { problem ->
+                throw CrawlException("下载失败 ${asset.url}：$problem")
+            }
             if (delayMs > 0) Thread.sleep(delayMs)
             return sink.accept(asset, temp)
         } finally {

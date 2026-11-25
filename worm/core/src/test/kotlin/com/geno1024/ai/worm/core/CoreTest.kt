@@ -107,6 +107,21 @@ class CoreTest {
     }
 
     @Test
+    fun `text error pages are rejected before they are saved as media`(@TempDir temp: File) {
+        val svg = File(temp, "placeholder.jpg")
+        svg.writeText("""<svg xmlns="http://www.w3.org/2000/svg" width="100" height="40"></svg>""")
+        assertTrue(MediaFiles.textResponseProblem(svg)!!.contains("SVG"))
+
+        val json = File(temp, "error.jpg")
+        json.writeText("""{"error":{"code":40353}}""")
+        assertTrue(MediaFiles.textResponseProblem(json)!!.contains("JSON"))
+
+        val jpeg = File(temp, "real.jpg")
+        jpeg.writeBytes(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xe0.toByte()))
+        assertNull(MediaFiles.textResponseProblem(jpeg))
+    }
+
+    @Test
     fun `inline data svg placeholders are skipped without crashing`() {
         val html = """
             <img src="data:image/svg+xml;utf8,<svg%20xmlns=http://www.w3.org/2000/svg%20width='4624'%20height='3468'></svg>">

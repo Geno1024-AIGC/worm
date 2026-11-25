@@ -212,11 +212,12 @@ private fun MediaTile(media: LocalMedia, onClick: () -> Unit) {
 @Composable
 private fun ImagePreview(media: LocalMedia, onClose: () -> Unit) {
     val context = LocalContext.current
-    var full by remember(media.id) { mutableStateOf<ImageBitmap?>(null) }
+    var decoded by remember(media.id) { mutableStateOf(DecodedImage(null)) }
     var scale by remember(media.id) { mutableFloatStateOf(1f) }
     LaunchedEffect(media.id) {
-        full = ThumbnailLoader.load(context.applicationContext, media, 2048)
+        decoded = ThumbnailLoader.loadDetailed(context.applicationContext, media, 2048)
     }
+    val full = decoded.bitmap
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = Color.Black) {
             Box(Modifier.fillMaxSize()) {
@@ -238,9 +239,9 @@ private fun ImagePreview(media: LocalMedia, onClose: () -> Unit) {
                 IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)) {
                     Icon(Icons.Default.Close, contentDescription = "关闭", tint = Color.White)
                 }
-                if (full == null) {
+                decoded.error?.let { reason ->
                     Text(
-                        "图片无法解码",
+                        "图片无法解码：$reason",
                         color = Color.White,
                         modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp),
                     )
