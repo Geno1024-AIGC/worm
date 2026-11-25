@@ -1,6 +1,6 @@
 # worm
 
-面向 QQ 空间与知乎的媒体收集工具集。Kotlin + Gradle Kotlin DSL：抓取逻辑放在共享 JVM 模块里，
+面向 QQ 空间、知乎、微博与 Facebook 的媒体收集工具集。Kotlin + Gradle Kotlin DSL：抓取逻辑放在共享 JVM 模块里，
 JVM CLI 与 Android app 使用同一份实现。第一阶段只落盘图片与视频；文字/HTML 导出留到后续 exporter。
 
 ## 模块
@@ -15,6 +15,7 @@ JVM CLI 与 Android app 使用同一份实现。第一阶段只落盘图片与�
 | `:worm:qzone:album` | QQ 空间相册（抓取源 `qzone/album`） |
 | `:worm:zhihu` | 知乎用户回答 / 文章 / 动态 |
 | `:worm:weibo` | 微博用户公开微博（抓取源 `weibo`） |
+| `:worm:facebook` | Facebook 用户照片 / 视频（抓取源 `facebook`，Graph token 或网页 Cookie） |
 | `:worm:android` | Jetpack Compose Android app |
 
 爬虫只产出 `CollectedItem.Media`（`--include-text` 会额外产出 `CollectedItem.Text` 供后续 exporter 使用）。
@@ -29,6 +30,8 @@ JVM CLI 与 Android app 使用同一份实现。第一阶段只落盘图片与�
   zhihu/<url_token>/video/<视频>.mp4   # 知乎视频
   weibo/<uid>/image/<图片>.jpg         # 微博配图与视频封面
   weibo/<uid>/video/<视频>.mp4         # 微博视频
+  facebook/<id>/image/<图片>.jpg       # Facebook 照片与视频封面
+  facebook/<id>/video/<视频>.mp4       # Facebook 视频
 ```
 
 图片与视频的扩展名按媒体类型白名单决定，URL 里的误导性后缀不会把封面 JPG 存成 MP4。
@@ -59,6 +62,9 @@ java -jar worm/qzone/shuoshuo/build/libs/*-all.jar --uin 123456 --out build/qzon
 - 知乎：`zhihu <主页URL或url_token>`，可加 `--answers` / `--articles` / `--activities` 限定内容类型。
 - 微博：`weibo <主页URL或数字uid>`，可加 `--include-text`。微博只认数字 uid（`weibo.com/u/<uid>` 会自动提取），
   自定义域名主页需先解析出 uid。
+- Facebook：`facebook <用户名、数字ID或主页URL> --token <access_token>`，可加 `--include-text`；
+  `--mode auto|graph|cookie` 控制取数方式，默认 `auto`（有 token 走 Graph API，失败自动回退网页 Cookie）。
+  Graph 照片取 `images[]` 中分辨率最大的 `source`，视频取 `source` 并把 `picture` 作为封面按图片落盘。
 
 抓取分两阶段：先翻完列表并记下全部媒体，再批量下载；下载阶段进度为确定的 `i/n`。
 发现列表后会在输出目录写 `resume-queue.json`，每完成一个媒体就从队列移除。进程被中断后，
@@ -88,6 +94,12 @@ Qzone 需要 `p_skey` 或 `skey`。知乎 CLI 可不带 Cookie 运行，但接�
 混用绝对时间、相对时间与时间戳，`WeiboApi.parseWeiboTime` 统一成 Unix 秒；图片取 `pics[].large.url`，
 视频取 `page_info.media_info.stream_url_hd`，`page_pic` 作为封面按图片落盘。接口 `ok=0` 或返回验证码页会
 给出明确警告，不会当成「没有微博」。
+
+Facebook 首选 Graph API：`--token`（或 Cookie 里的 `access_token`）提供用户/页面 access token，
+`photos` / `videos` 两条边各自按 `paging.cursors.after` 翻页；token 过期或接口报错时，`auto` 模式清空
+这次 Graph 的部分结果，改用 `m.facebook.com/<id>/photos` 页面里的 CDN 媒体和「下一页」链接继续爬，并在
+警告里说明回退原因。`--mode graph` / `--mode cookie` 可锁定单条路径，不会静默退化；网页路径是
+best-effort，页面改版可能失效，遇到登录页会明确报「Cookie 已失效」而不是「没有照片」。
 
 Qzone 相册接口的 `hostUin` 是相册主人（抓取目标），`uin` 必须是登录者自己；两者写成同一个值会让
 非本人相册一直返回非零 code。相册列表用 `mode=3` 加 `pageStart/pageNum` 翻页（否则只给最近的相册），
