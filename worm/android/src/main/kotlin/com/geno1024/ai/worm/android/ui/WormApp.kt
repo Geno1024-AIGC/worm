@@ -192,14 +192,6 @@ fun WormApp() {
                         modifier = Modifier.fillMaxWidth(),
                     )
 
-                    OutlinedTextField(
-                        value = ui.pageLimit,
-                        onValueChange = viewModel::updatePageLimit,
-                        label = { Text("页数上限（0=全部，最多 1000）") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
                     if (ui.source == Source.QZONE_ALBUM) {
                         OutlinedTextField(
                             value = ui.albumFilter,

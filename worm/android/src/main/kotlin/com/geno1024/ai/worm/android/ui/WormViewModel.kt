@@ -19,6 +19,7 @@ import com.geno1024.ai.worm.core.CrawlListener
 import com.geno1024.ai.worm.core.CrawlProgress
 import com.geno1024.ai.worm.core.CrawlRequest
 import com.geno1024.ai.worm.core.CrawlStamp
+import com.geno1024.ai.worm.core.ALL_PAGES
 import com.geno1024.ai.worm.core.CrawlSession
 import com.geno1024.ai.worm.core.Crawler
 import com.geno1024.ai.worm.core.DirectoryMediaSink
@@ -28,7 +29,6 @@ import com.geno1024.ai.worm.core.MediaAsset
 import com.geno1024.ai.worm.core.MediaSink
 import com.geno1024.ai.worm.core.ResumeQueue
 import com.geno1024.ai.worm.core.ResumeRunner
-import com.geno1024.ai.worm.core.pageCapOf
 import com.geno1024.ai.worm.core.sinceOf
 import com.geno1024.ai.worm.core.qzone.normalizeUin
 import com.geno1024.ai.worm.core.qzone.requireQzoneAuth
@@ -52,7 +52,6 @@ import java.util.Collections
 data class UiState(
     val source: Source = Source.QZONE,
     val subject: String = "",
-    val pageLimit: String = "10",
     val albumFilter: String = "",
     val qqCookies: Map<String, String> = emptyMap(),
     val zhihuCookies: Map<String, String> = emptyMap(),
@@ -190,7 +189,6 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
             it.copy(
                 source = source,
                 subject = "",
-                pageLimit = "10",
                 albumFilter = "",
                 running = false,
                 progress = null,
@@ -210,10 +208,6 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
     fun updateSubject(value: String) {
         _state.update { it.copy(subject = value) }
         refreshLastRun()
-    }
-
-    fun updatePageLimit(value: String) {
-        _state.update { it.copy(pageLimit = value) }
     }
 
     fun updateAlbumFilter(value: String) {
@@ -376,8 +370,9 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         return CrawlSession(cookies, cookies["uin"] ?: cookies["p_uin"])
     }
 
+    /** No page knob in the app: full crawls run to the API's end (bounded by ALL_PAGES). */
     private fun crawlerFor(state: UiState, http: HttpPortal, cacheDir: File): Crawler {
-        val cap = pageCapOf(state.pageLimit)
+        val cap = ALL_PAGES
         return when (state.source) {
             Source.QZONE -> ShuoshuoCrawler(http, cacheDir, maxPages = cap)
             Source.QZONE_ALBUM -> AlbumCrawler(
