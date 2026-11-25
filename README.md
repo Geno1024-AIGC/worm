@@ -14,6 +14,7 @@ JVM CLI 与 Android app 使用同一份实现。第一阶段只落盘图片与�
 | `:worm:qzone:shuoshuo` | QQ 空间说说（抓取源 `qzone`） |
 | `:worm:qzone:album` | QQ 空间相册（抓取源 `qzone/album`） |
 | `:worm:zhihu` | 知乎用户回答 / 文章 / 动态 |
+| `:worm:weibo` | 微博用户公开微博（抓取源 `weibo`） |
 | `:worm:android` | Jetpack Compose Android app |
 
 爬虫只产出 `CollectedItem.Media`（`--include-text` 会额外产出 `CollectedItem.Text` 供后续 exporter 使用）。
@@ -26,6 +27,8 @@ JVM CLI 与 Android app 使用同一份实现。第一阶段只落盘图片与�
   qzone/<QQ号>/<相册名>/<文件>.jpg      # qzone/album，每个相册一个子目录
   zhihu/<url_token>/image/<图片>.jpg   # 知乎图片
   zhihu/<url_token>/video/<视频>.mp4   # 知乎视频
+  weibo/<uid>/image/<图片>.jpg         # 微博配图与视频封面
+  weibo/<uid>/video/<视频>.mp4         # 微博视频
 ```
 
 图片与视频的扩展名按媒体类型白名单决定，URL 里的误导性后缀不会把封面 JPG 存成 MP4。
@@ -54,6 +57,8 @@ java -jar worm/qzone/shuoshuo/build/libs/*-all.jar --uin 123456 --out build/qzon
 - 相册：`--uin`、`--album` 过滤相册名/ID，`--pages`（每相册）、`--delay`、`--out`。登录 Cookie 必须带
   `uin`/`p_uin`，因为相册接口要用登录者 UIN 而不是目标 UIN。
 - 知乎：`zhihu <主页URL或url_token>`，可加 `--answers` / `--articles` / `--activities` 限定内容类型。
+- 微博：`weibo <主页URL或数字uid>`，可加 `--include-text`。微博只认数字 uid（`weibo.com/u/<uid>` 会自动提取），
+  自定义域名主页需先解析出 uid。
 
 抓取分两阶段：先翻完列表并记下全部媒体，再批量下载；下载阶段进度为确定的 `i/n`。
 发现列表后会在输出目录写 `resume-queue.json`，每完成一个媒体就从队列移除。进程被中断后，
@@ -78,6 +83,11 @@ java -jar worm/qzone/shuoshuo/build/libs/*-all.jar --uin 123456 --out build/qzon
 Qzone 需要 `p_skey` 或 `skey`。知乎 CLI 可不带 Cookie 运行，但接口通常返回 401/403，此时警告会写进
 `report.json` 与标准输出；当前不实现 `x-zse-96` 签名。解析失败、登录失效、下载失败都不会被静默当成
 「没有内容」。
+
+微博走 `m.weibo.cn` 的 `container/getIndex` 接口，Cookie 里的 `SUB` / `SUBP` 决定能看多少内容。`created_at`
+混用绝对时间、相对时间与时间戳，`WeiboApi.parseWeiboTime` 统一成 Unix 秒；图片取 `pics[].large.url`，
+视频取 `page_info.media_info.stream_url_hd`，`page_pic` 作为封面按图片落盘。接口 `ok=0` 或返回验证码页会
+给出明确警告，不会当成「没有微博」。
 
 Qzone 相册接口的 `hostUin` 是相册主人（抓取目标），`uin` 必须是登录者自己；两者写成同一个值会让
 非本人相册一直返回非零 code。相册列表用 `mode=3` 加 `pageStart/pageNum` 翻页（否则只给最近的相册），
