@@ -40,6 +40,18 @@ class BrowserPathsTest {
     }
 
     @Test
+    fun `folder name sort is case insensitive and leaves media sort alone`() {
+        val folders = listOf(
+            DirectoryEntry("beta", 1L),
+            DirectoryEntry("Alpha", 9L),
+            DirectoryEntry("alpha", 0L),
+        )
+        assertEquals(listOf("Alpha", "alpha", "beta"), sortDirectoriesByName(folders).map { it.name })
+        assertEquals(listOf("Alpha", "alpha", "beta"), sortDirectories(folders, FolderSort.NAME).map { it.name })
+        assertEquals(listOf("Alpha", "beta", "alpha"), sortDirectories(folders, FolderSort.TIME).map { it.name })
+    }
+
+    @Test
     fun `media sort newest first and keep unknown times last`() {
         val sorted = sortMediaByTime(
             listOf(

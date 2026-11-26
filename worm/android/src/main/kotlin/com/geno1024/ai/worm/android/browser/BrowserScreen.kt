@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -68,6 +69,7 @@ fun BrowserScreen(
     val library = remember(treeUri) { MediaLibrary(context.applicationContext, treeUri) }
     var folder by remember { mutableStateOf("") }
     var listing by remember { mutableStateOf<DirectoryListing?>(null) }
+    var folderSort by remember { mutableStateOf(FolderSort.TIME) }
     var preview by remember { mutableStateOf<LocalMedia?>(null) }
 
     // Nested back: close the image preview, then climb folders, before the parent
@@ -92,6 +94,16 @@ fun BrowserScreen(
                         if (parent == null) onBack() else folder = parent
                     }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    // Only the folder tiles are sortable; media tiles below stay newest-first.
+                    if (listing?.directories?.isNotEmpty() == true) {
+                        TextButton(onClick = {
+                            folderSort = if (folderSort == FolderSort.TIME) FolderSort.NAME else FolderSort.TIME
+                        }) {
+                            Text(if (folderSort == FolderSort.TIME) "文件夹：时间↓" else "文件夹：名称↑")
+                        }
                     }
                 },
             )
@@ -123,9 +135,10 @@ fun BrowserScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(current.directories, key = { "dir:${it.name}" }) { entry ->
+                    items(sortDirectories(current.directories, folderSort), key = { "dir:${it.name}" }) { entry ->
                         DirectoryTile(entry) { folder = childFolder(folder, entry.name) }
                     }
+                    // Media tiles deliberately keep MediaLibrary's newest-first order.
                     items(current.media, key = { it.id }) { media ->
                         MediaTile(media) {
                             if (media.kind == MediaKind.IMAGE) preview = media

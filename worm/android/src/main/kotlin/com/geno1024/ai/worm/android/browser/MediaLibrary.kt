@@ -57,6 +57,21 @@ fun sortDirectoriesByTime(directories: List<DirectoryEntry>): List<DirectoryEntr
             .thenBy { it.name },
     )
 
+/** Name order is offered only for the folder tiles; media stays newest-first. */
+enum class FolderSort { TIME, NAME }
+
+fun sortDirectoriesByName(directories: List<DirectoryEntry>): List<DirectoryEntry> =
+    directories.sortedWith(
+        compareBy<DirectoryEntry, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
+            .thenBy { it.name },
+    )
+
+fun sortDirectories(directories: List<DirectoryEntry>, mode: FolderSort): List<DirectoryEntry> =
+    when (mode) {
+        FolderSort.TIME -> sortDirectoriesByTime(directories)
+        FolderSort.NAME -> sortDirectoriesByName(directories)
+    }
+
 data class DirectoryEntry(
     val name: String,
     val newestAt: Long? = null,
