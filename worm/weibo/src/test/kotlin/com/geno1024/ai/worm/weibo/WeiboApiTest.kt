@@ -58,6 +58,42 @@ class WeiboApiTest {
     }
 
     @Test
+    fun `web timeline url and headers target the logged-in profile`() {
+        assertEquals(
+            "https://weibo.com/ajax/statuses/mymblog?uid=12345&page=3&feature=0",
+            buildWeiboTimelineUrl("12345", 3),
+        )
+        assertEquals("https://weibo.com/u/12345", weiboWebReferer("12345"))
+        assertEquals("XMLHttpRequest", WEIBO_WEB_HEADERS["x-requested-with"])
+        assertTrue(WEIBO_WEB_HEADERS.getValue("accept").contains("application/json"))
+    }
+
+    @Test
+    fun `web timeline parser keeps older posts and reports errors`() {
+        val body = """
+            {"ok":1,"data":{"total_number":45,"list":[
+              {"id":"w1","created_at":"1700000000","text":"<p>photo</p>",
+                "pics":[{"large":{"url":"https://ww2.sinaimg.cn/large/aaa.jpg"}}]},
+              {"id":"old","created_at":"1600000000","text":"old",
+                "page_info":{"type":"video","media_info":{"stream_url_hd":"https://video.weibo.com/old.mp4"}}}
+            ]}}
+        """.trimIndent()
+        val referer = weiboWebReferer("12345")
+        val page = parseWeiboTimelinePage(body, referer, 1_700_010_000L)
+        assertNull(page.error)
+        assertEquals(3, page.pageCount)
+        assertEquals(listOf("w1", "old"), page.posts.map { it.id })
+        assertEquals(1_600_000_000L, page.posts[1].createdAt)
+        assertEquals("https://video.weibo.com/old.mp4", page.posts[1].media.single().url)
+        assertEquals(referer, page.posts[0].media.single().referer)
+
+        val failure = parseWeiboTimelinePage("""{"ok":0,"msg":"not logged in"}""", referer)
+        assertTrue(failure.error!!.contains("not logged in"))
+        val cut = parseWeiboTimelinePage("""{"ok":1,"data":{"list":[{"id":"w1","created_at":"1600000000""", referer)
+        assertTrue(cut.error!!.contains("响应被截断"))
+    }
+
+    @Test
     fun `api errors and captcha pages are readable`() {
         val error = parseWeiboListPage("""{"ok":0,"msg":"user not found"}""", "123").error
             ?: error("expected an API error")

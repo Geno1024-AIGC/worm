@@ -90,10 +90,13 @@ Qzone 需要 `p_skey` 或 `skey`。知乎 CLI 可不带 Cookie 运行，但接�
 `report.json` 与标准输出；当前不实现 `x-zse-96` 签名。解析失败、登录失效、下载失败都不会被静默当成
 「没有内容」。
 
-微博走 `m.weibo.cn` 的 `container/getIndex` 接口，Cookie 里的 `SUB` / `SUBP` 决定能看多少内容。`created_at`
-混用绝对时间、相对时间与时间戳，`WeiboApi.parseWeiboTime` 统一成 Unix 秒；图片取 `pics[].large.url`，
-视频取 `page_info.media_info.stream_url_hd`，`page_pic` 作为封面按图片落盘。接口 `ok=0` 或返回验证码页会
-给出明确警告，不会当成「没有微博」。
+微博有两条取数路径：先走 `m.weibo.cn` 的 `container/getIndex`（无需登录也能用，可见范围有限）；
+若 Cookie 带 `SUB` / `SUBP`，再走已登录的 `weibo.com/ajax/statuses/mymblog` 网页时间线，用来够到移动端
+翻不到的更早历史。两条路径都按页翻到空页或 `ALL_PAGES`，合并时用 `post.id` 去重（网页端重叠的帖子不会
+重复下载），增量命中水位则两条路径一起停。`created_at` 混用绝对时间、相对时间与时间戳，
+`WeiboApi.parseWeiboTime` 统一成 Unix 秒；图片取 `pics[].large.url`，视频取
+`page_info.media_info.stream_url_hd`，`page_pic` 作为封面按图片落盘。接口 `ok=0`、403 风控或验证码页
+都会给出明确警告，不会当成「没有微博」。
 
 Facebook 首选 Graph API：`--token`（或 Cookie 里的 `access_token`）提供用户/页面 access token，
 `photos` / `videos` 两条边各自按 `paging.cursors.after` 翻页；token 过期或接口报错时，`auto` 模式清空
@@ -167,7 +170,7 @@ Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复�
 抛出 `illegal character at 24` 这类原始错误。现在所有爬虫响应解析都走 `Jsonp.objectOrNull()`：
 非 JSON 响应（SVG / XML / HTML / 空响应）不再抛原始异常，而是给出「收到 SVG 页面，通常是验证码或
 风控拦截，请重新登录或稍后再试」之类可读警告，且不会中断整次抓取。
-网络层会读满 `Content-Length`，短响应和读超时会重试；知乎和微博列表解析再兜一层：即使接口用
+网络层会读满 `Content-Length`，短响应和读超时会重试；知乎和微博的两个列表端点解析再兜一层：即使接口用
 chunked 导致半截 JSON 溜过网络层，也会自动重取一次。仍失败才明确报「响应被截断」，而不是笼统的
 「不是合法 JSON」。截断判定按括号/引号配平（在字符串外计数），所以像
 `{"ok":1,"data":{"cardlistInfo":{"contain}` 这种结尾恰好是 `}`、但外层没闭合的响应也能识别。

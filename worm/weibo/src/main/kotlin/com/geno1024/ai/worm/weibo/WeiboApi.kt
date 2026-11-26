@@ -26,6 +26,17 @@ fun normalizeWeiboSubject(input: String): String {
 fun buildWeiboListUrl(uid: String, page: Int): String =
     "https://m.weibo.cn/api/container/getIndex?type=uid&value=$uid&containerid=107603$uid&page=$page"
 
+/** The logged-in web timeline often exposes older posts than the mobile container. */
+fun buildWeiboTimelineUrl(uid: String, page: Int): String =
+    "https://weibo.com/ajax/statuses/mymblog?uid=$uid&page=$page&feature=0"
+
+fun weiboWebReferer(uid: String): String = "https://weibo.com/u/$uid"
+
+val WEIBO_WEB_HEADERS: Map<String, String> = mapOf(
+    "x-requested-with" to "XMLHttpRequest",
+    "accept" to "application/json, text/plain, */*",
+)
+
 data class WeiboPost(
     val id: String,
     val createdAt: Long?,
@@ -55,14 +66,7 @@ fun parseWeiboListPage(
 
     val posts = mutableListOf<WeiboPost>()
     fun add(mblog: JSONObject) {
-        val id = mblog.optStringOf("id", "mid", "idstr") ?: return
-        val createdAt = parseWeiboTime(mblog.optStringOf("created_at", "createdAt"), nowSec)
-        posts += WeiboPost(
-            id = id,
-            createdAt = createdAt,
-            html = mblog.optStringOf("text", "text_raw").orEmpty(),
-            media = WeiboMedia.extract(mblog, createdAt, referer),
-        )
+        postOf(mblog, referer, nowSec)?.let(posts::add)
     }
 
     val cards = data.optArrayOf("cards") ?: return WeiboListPage(emptyList())
@@ -74,6 +78,36 @@ fun parseWeiboListPage(
     }
     val total = data.optObjectOf("cardlistInfo")?.optLongOf("total")?.takeIf { it > 0 }
     return WeiboListPage(posts, total?.let { ((it + 19) / 20).toInt() })
+}
+
+/** Pure parse of the logged-in `weibo.com/ajax/statuses/mymblog` response. */
+fun parseWeiboTimelinePage(
+    body: String,
+    referer: String,
+    nowSec: Long = System.currentTimeMillis() / 1000,
+): WeiboListPage {
+    val root = Jsonp.objectOrNull(body) ?: return WeiboListPage(emptyList(), null, responseProblem(body))
+    if (root.optInt("ok", 1) == 0) {
+        val problem = root.optStringOf("msg", "message") ?: "未知错误"
+        return WeiboListPage(emptyList(), null, "微博网页接口错误：$problem")
+    }
+    val data = root.optObjectOf("data")
+        ?: return WeiboListPage(emptyList(), null, "微博网页接口未返回 data：${responseProblem(body)}")
+    val list = data.optArrayOf("list") ?: return WeiboListPage(emptyList())
+    val posts = list.objects().mapNotNull { postOf(it, referer, nowSec) }
+    val total = data.optLongOf("total", "total_number")?.takeIf { it > 0 }
+    return WeiboListPage(posts, total?.let { ((it + 19) / 20).toInt() })
+}
+
+private fun postOf(mblog: JSONObject, referer: String, nowSec: Long): WeiboPost? {
+    val id = mblog.optStringOf("id", "mid", "idstr") ?: return null
+    val createdAt = parseWeiboTime(mblog.optStringOf("created_at", "createdAt"), nowSec)
+    return WeiboPost(
+        id = id,
+        createdAt = createdAt,
+        html = mblog.optStringOf("text", "text_raw").orEmpty(),
+        media = WeiboMedia.extract(mblog, createdAt, referer),
+    )
 }
 
 /** Weibo mixes absolute dates, relative labels and epoch numbers in `created_at`. */

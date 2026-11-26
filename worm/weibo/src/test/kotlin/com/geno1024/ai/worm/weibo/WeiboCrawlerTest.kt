@@ -45,6 +45,39 @@ class WeiboCrawlerTest {
         }
     }
 
+    /** Returns a distinct body per endpoint/page so both timelines can be simulated. */
+    private class RouteHttp(
+        private val mobile: Map<Int, String>,
+        private val web: Map<Int, String>,
+    ) : HttpPortal {
+        val urls = mutableListOf<String>()
+        val referers = mutableListOf<String?>()
+        val headers = mutableListOf<Map<String, String>>()
+
+        override fun get(
+            url: String, session: CrawlSession, referer: String?, extraHeaders: Map<String, String>,
+        ): HttpResponse {
+            urls += url
+            referers += referer
+            headers += extraHeaders
+            val page = Regex("""page=(\d+)""").find(url)!!.groupValues[1].toInt()
+            val body = if (url.contains("statuses/mymblog")) {
+                web[page] ?: """{"ok":1,"data":{"list":[]}}"""
+            } else {
+                mobile[page] ?: """{"ok":1,"data":{"cards":[]}}"""
+            }
+            return HttpResponse(200, body, url)
+        }
+
+        override fun download(
+            url: String, session: CrawlSession, referer: String?, target: File,
+            onBytes: (Long, Long?) -> Unit,
+        ): File {
+            target.writeBytes("payload".toByteArray())
+            return target
+        }
+    }
+
     private fun crawler(http: HttpPortal, temp: File) =
         WeiboCrawler(http, File(temp, "cache"), downloadDelayMs = 0)
 
@@ -62,7 +95,8 @@ class WeiboCrawlerTest {
         assertEquals(4, report.items.size) // 1 image + 1 video + 2 text
         assertEquals(2, report.saved.size)
         assertTrue(http.urls[0].contains("containerid=10760312345"))
-        assertEquals(2, http.urls.size)
+        assertEquals(3, http.urls.size) // mobile page 1/2 + the logged-in web timeline page 1
+        assertTrue(http.urls.any { it.contains("statuses/mymblog?uid=12345&page=1") })
         assertTrue(report.saved.any { it.name.contains("w2") || it.asset.kind == MediaKind.VIDEO })
         assertTrue(File(temp, "media/weibo/12345/image").isDirectory)
         assertTrue(File(temp, "media/weibo/12345/video").isDirectory)
@@ -104,7 +138,7 @@ class WeiboCrawlerTest {
         assertEquals(2, report.items.size) // one image + one video, no text in this request
         assertEquals(2, report.saved.size)
         assertTrue(report.warnings.isEmpty())
-        assertEquals(3, http.urls.size)
+        assertEquals(4, http.urls.size) // first request + one refetch + mobile page 2 + web page 1
     }
 
     @Test
@@ -131,5 +165,64 @@ class WeiboCrawlerTest {
         )
         assertTrue(report.items.isEmpty())
         assertTrue(report.warnings.any { it.contains("需要登录") || it.contains("风控") })
+    }
+
+    @Test
+    fun `mobile and web timelines merge and dedupe by post id`(@TempDir temp: File) = runBlocking {
+        val webPage = """
+            {"ok":1,"data":{"total_number":30,"list":[
+              {"id":"w1","created_at":"1700000000","text":"<p>photo</p>",
+                "pics":[{"large":{"url":"https://ww2.sinaimg.cn/large/aaa.jpg"}}]},
+              {"id":"w3","created_at":"1600000000","text":"old",
+                "pics":[{"large":{"url":"https://ww2.sinaimg.cn/large/old.jpg"}}]}
+            ]}}
+        """.trimIndent()
+        val http = RouteHttp(mapOf(1 to firstPage), mapOf(1 to webPage))
+        val report = crawler(http, temp).collect(
+            CrawlRequest("12345"), CrawlSession(mapOf("SUBP" to "token")),
+            DirectoryMediaSink(File(temp, "media")),
+        )
+        assertTrue(report.warnings.isEmpty())
+        assertEquals(3, report.items.size) // w1 image, w2 video, w3 older web-only image
+        assertEquals(3, report.saved.size)
+        assertEquals(1, report.items.count { it is CollectedItem.Media && it.asset.url.endsWith("aaa.jpg") })
+        assertEquals(1, report.items.count { it is CollectedItem.Media && it.asset.url.endsWith("w2.mp4") })
+        assertTrue(report.saved.any { it.name.contains("w3") })
+        assertEquals(1_700_000_000L, report.newestItemAt)
+        assertEquals(4, http.urls.size) // mobile page 1/2 + web page 1/2
+        assertTrue(http.urls[2].contains("statuses/mymblog?uid=12345&page=1"))
+        assertEquals("https://weibo.com/u/12345", http.referers[2])
+        assertEquals("XMLHttpRequest", http.headers[2]["x-requested-with"])
+    }
+
+    @Test
+    fun `web timeline is skipped without login cookies`(@TempDir temp: File) = runBlocking {
+        val http = RouteHttp(mapOf(1 to firstPage), emptyMap())
+        val report = crawler(http, temp).collect(
+            CrawlRequest("12345"), CrawlSession(emptyMap()),
+            DirectoryMediaSink(File(temp, "media")),
+        )
+        assertTrue(report.warnings.any { it.contains("未提供微博 Cookie") })
+        assertTrue(http.urls.none { it.contains("statuses/mymblog") })
+        assertEquals(2, http.urls.size)
+    }
+
+    @Test
+    fun `watermark hit on web timeline stops both paths`(@TempDir temp: File) = runBlocking {
+        val oldPage = """
+            {"ok":1,"data":{"list":[{"id":"old","created_at":"1600000000","text":"old",
+              "pics":[{"large":{"url":"https://ww2.sinaimg.cn/large/old.jpg"}}]}]}}
+        """.trimIndent()
+        val http = RouteHttp(emptyMap(), mapOf(1 to oldPage))
+        val report = crawler(http, temp).collect(
+            CrawlRequest("12345", since = 1_700_000_000L), CrawlSession(mapOf("SUB" to "token")),
+            DirectoryMediaSink(File(temp, "media")),
+        )
+        assertTrue(report.items.isEmpty())
+        assertTrue(report.warnings.any {
+            it.contains("微博网页时间线") && it.contains("命中上次抓取时间")
+        })
+        assertEquals(2, http.urls.size)
+        assertTrue(http.urls.none { it.contains("page=2") })
     }
 }

@@ -43,71 +43,107 @@ class WeiboCrawler(
         val items = mutableListOf<CollectedItem>()
         val warnings = mutableListOf<String>()
         val seen = HashSet<String>()
+        val seenPosts = HashSet<String>()
         val since = request.since
         val nowSec = System.currentTimeMillis() / 1000L
         var newestAt = 0L
+        var stopAll = false
         if (session.cookies.isEmpty()) warnings += "未提供微博 Cookie：部分内容可能不可见或触发风控"
 
-        // Phase 1: list all posts without downloading a single byte.
-        var page = 1
-        while (page <= maxPages) {
-            listener.onProgress(CrawlProgress(
-                "微博列表", page, null,
-                "page=$page，已发现 ${items.size} 项${if (since != null) "，增量" else ""}",
-            ))
-            val url = buildWeiboListUrl(uid, page)
-            var response = http.get(url, session, WEIBO_REFERER)
-            if (!usable(response, warnings)) break
-            var parsed = parseWeiboListPage(response.body, uid, WEIBO_REFERER, nowSec)
-            // A chunked body may stop mid-value without an IOException or a wrong
-            // Content-Length. Re-fetch once before blaming the response format.
-            if (parsed.error?.contains("响应被截断") == true) {
-                response = http.get(url, session, WEIBO_REFERER)
-                if (!usable(response, warnings)) break
-                parsed = parseWeiboListPage(response.body, uid, WEIBO_REFERER, nowSec)
-            }
-            if (parsed.error != null) {
-                warnings += "微博列表: ${parsed.error}"
-                break
-            }
-            if (parsed.posts.isEmpty()) break
-
-            val pageTimes = mutableListOf<Long?>()
-            for (post in parsed.posts) {
-                pageTimes += post.createdAt
-                post.createdAt?.let { if (it > newestAt) newestAt = it }
-                if (isBeforeWatermark(post.createdAt, since)) continue
-
-                val candidates = mutableListOf<CollectedItem>()
-                for (asset in post.media) {
-                    val folder = if (asset.kind == MediaKind.IMAGE) "image" else "video"
-                    candidates += CollectedItem.Media(asset.copy(relativeDir = "weibo/$uid/$folder"))
+        /** One endpoint's newest-first timeline; both endpoints feed the same deduped batch. */
+        fun crawlSource(
+            stage: String,
+            urlOf: (Int) -> String,
+            parse: (String) -> WeiboListPage,
+            referer: String,
+            headers: Map<String, String>,
+        ) {
+            var page = 1
+            while (page <= maxPages && !stopAll) {
+                listener.onProgress(CrawlProgress(
+                    stage, page, null,
+                    "page=$page，已发现 ${items.size} 项${if (since != null) "，增量" else ""}",
+                ))
+                val url = urlOf(page)
+                var response = http.get(url, session, referer, headers)
+                if (!usable(response, stage, warnings)) return
+                var parsed = parse(response.body)
+                // A chunked body may stop mid-value without an IOException or a wrong
+                // Content-Length. Re-fetch once before blaming the response format.
+                if (parsed.error?.contains("响应被截断") == true) {
+                    response = http.get(url, session, referer, headers)
+                    if (!usable(response, stage, warnings)) return
+                    parsed = parse(response.body)
                 }
-                if (request.includeText && post.html.isNotBlank()) {
-                    candidates += CollectedItem.Text(
-                        sourceUrl = "https://weibo.com/$uid/${post.id}",
-                        title = null,
-                        body = Jsoup.parse(post.html).text(),
-                        createdAt = post.createdAt,
-                    )
+                if (parsed.error != null) {
+                    warnings += "$stage: ${parsed.error}"
+                    return
                 }
-                for (item in candidates) {
-                    if (item.identity() in request.seenIds) continue
-                    if (item is CollectedItem.Media) {
-                        if (!seen.add("${item.asset.kind.name}:${item.asset.url}")) continue
-                        listener.onAssetFound(item.asset)
+                if (parsed.posts.isEmpty()) return
+
+                val pageTimes = mutableListOf<Long?>()
+                for (post in parsed.posts) {
+                    pageTimes += post.createdAt
+                    post.createdAt?.let { if (it > newestAt) newestAt = it }
+                    // The web timeline overlaps the mobile one; count each post once.
+                    if (!seenPosts.add(post.id)) continue
+                    if (isBeforeWatermark(post.createdAt, since)) continue
+
+                    val candidates = mutableListOf<CollectedItem>()
+                    for (asset in post.media) {
+                        val folder = if (asset.kind == MediaKind.IMAGE) "image" else "video"
+                        candidates += CollectedItem.Media(asset.copy(relativeDir = "weibo/$uid/$folder"))
                     }
-                    items += item
+                    if (request.includeText && post.html.isNotBlank()) {
+                        candidates += CollectedItem.Text(
+                            sourceUrl = "https://weibo.com/$uid/${post.id}",
+                            title = null,
+                            body = Jsoup.parse(post.html).text(),
+                            createdAt = post.createdAt,
+                        )
+                    }
+                    for (item in candidates) {
+                        if (item.identity() in request.seenIds) continue
+                        if (item is CollectedItem.Media) {
+                            if (!seen.add("${item.asset.kind.name}:${item.asset.url}")) continue
+                            listener.onAssetFound(item.asset)
+                        }
+                        items += item
+                    }
                 }
-            }
 
-            if (reachedWatermark(pageTimes, since)) {
-                val detail = "命中上次抓取时间，提前结束（接口估算共 ${parsed.pageCount ?: "?"} 页）"
-                listener.onProgress(CrawlProgress("微博列表", page, null, detail))
-                warnings += "增量抓取在第 $page 页$detail"
-                break
+                if (reachedWatermark(pageTimes, since)) {
+                    val detail = "命中上次抓取时间，提前结束（接口估算共 ${parsed.pageCount ?: "?"} 页）"
+                    listener.onProgress(CrawlProgress(stage, page, null, detail))
+                    warnings += "增量抓取在 $stage 第 $page 页$detail"
+                    stopAll = true
+                    return
+                }
+                page++
             }
-            page++
+        }
+
+        // Phase 1: list posts without downloading a single byte. The mobile endpoint
+        // works without login; the web timeline is tried as well when SUB/SUBP is
+        // available because it can reach older pages the mobile one stops short of.
+        crawlSource(
+            "微博列表",
+            { buildWeiboListUrl(uid, it) },
+            { parseWeiboListPage(it, uid, WEIBO_REFERER, nowSec) },
+            WEIBO_REFERER,
+            emptyMap(),
+        )
+        val loggedIn = session.cookies["SUB"]?.isNotBlank() == true ||
+            session.cookies["SUBP"]?.isNotBlank() == true
+        if (loggedIn && !stopAll) {
+            val referer = weiboWebReferer(uid)
+            crawlSource(
+                "微博网页时间线",
+                { buildWeiboTimelineUrl(uid, it) },
+                { parseWeiboTimelinePage(it, referer, nowSec) },
+                referer,
+                WEIBO_WEB_HEADERS,
+            )
         }
 
         val assets = items.filterIsInstance<CollectedItem.Media>().map { it.asset }
@@ -128,13 +164,13 @@ class WeiboCrawler(
         )
     }
 
-    private fun usable(response: HttpResponse, warnings: MutableList<String>): Boolean = when {
+    private fun usable(response: HttpResponse, stage: String, warnings: MutableList<String>): Boolean = when {
         response.status == 401 || response.status == 403 -> {
-            warnings += "微博需要登录或触发风控（HTTP ${response.status}）"
+            warnings += "$stage 需要登录或触发风控（HTTP ${response.status}）"
             false
         }
         !response.isSuccess -> {
-            warnings += "微博列表返回 HTTP ${response.status}"
+            warnings += "$stage 返回 HTTP ${response.status}"
             false
         }
         else -> true
