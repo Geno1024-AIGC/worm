@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -233,17 +234,33 @@ fun WormApp() {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("登录态：${if (ui.loginReady) "已就绪" else "未登录"}")
-                            Button(
-                                onClick = {
-                                    loginLauncher.launch(
-                                        Intent(context, LoginActivity::class.java).apply {
-                                            putExtra(LoginActivity.EXTRA_SITE, ui.source.site.name)
-                                        },
-                                    )
-                                },
-                            ) {
-                                Icon(Icons.Default.Person, contentDescription = null)
-                                Text("登录 ${ui.source.site.label}")
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = {
+                                        loginLauncher.launch(
+                                            Intent(context, LoginActivity::class.java).apply {
+                                                putExtra(LoginActivity.EXTRA_SITE, ui.source.site.name)
+                                            },
+                                        )
+                                    },
+                                ) {
+                                    Icon(Icons.Default.Person, contentDescription = null)
+                                    Text("登录 ${ui.source.site.label}")
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        val removed = viewModel.clearLogin()
+                                        val message = when {
+                                            removed < 0 -> "抓取中，不能清除登录态"
+                                            removed > 0 -> "已清除 ${ui.source.site.label} 登录态"
+                                            else -> "当前没有 ${ui.source.site.label} 登录态"
+                                        }
+                                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                    },
+                                    enabled = !ui.running,
+                                ) {
+                                    Text("清除登录态")
+                                }
                             }
                             Text("保存到：${ui.storageLabel}", style = MaterialTheme.typography.bodySmall)
                             Button(onClick = { storageLauncher.launch(null) }) {

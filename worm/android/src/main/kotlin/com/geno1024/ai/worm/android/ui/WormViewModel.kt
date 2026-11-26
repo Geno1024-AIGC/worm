@@ -170,6 +170,14 @@ class WormViewModel(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Drops only the current site's WebView cookies; a running crawl is left alone. */
+    fun clearLogin(): Int {
+        if (_state.value.running) return -1
+        val removed = SiteCookies.clear(_state.value.source.site)
+        refreshCookies()
+        return removed
+    }
+
     /** The journal key follows the crawler's own normalisation, not the user's spelling. */
     private fun journalSubject(source: Source, raw: String): String = when (source) {
         Source.QZONE, Source.QZONE_ALBUM -> normalizeUin(raw).takeIf { it != "0" } ?: ""

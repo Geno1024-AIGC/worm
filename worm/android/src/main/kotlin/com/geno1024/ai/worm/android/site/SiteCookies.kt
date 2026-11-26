@@ -32,15 +32,25 @@ object SiteCookies {
         "https://graph.facebook.com/",
     )
 
+    private fun urls(site: Site): List<String> = when (site) {
+        Site.QQ -> QQ_URLS
+        Site.ZHIHU -> ZHIHU_URLS
+        Site.WEIBO -> WEIBO_URLS
+        Site.FACEBOOK -> FACEBOOK_URLS
+    }
+
+    private fun domains(site: Site): List<String> = when (site) {
+        Site.QQ -> listOf("qq.com")
+        Site.ZHIHU -> listOf("zhihu.com")
+        // Weibo writes SUB/SUBP under weibo.cn as well as weibo.com.
+        Site.WEIBO -> listOf("weibo.cn", "weibo.com")
+        Site.FACEBOOK -> listOf("facebook.com")
+    }
+
     fun read(site: Site): Map<String, String> {
         val manager = CookieManager.getInstance()
         val jar = LinkedHashMap<String, String>()
-        val urls = when (site) {
-            Site.QQ -> QQ_URLS
-            Site.ZHIHU -> ZHIHU_URLS
-            Site.WEIBO -> WEIBO_URLS
-            Site.FACEBOOK -> FACEBOOK_URLS
-        }
+        val urls = urls(site)
         for (url in urls) {
             val raw = manager.getCookie(url) ?: continue
             for (part in raw.split(';')) {
@@ -61,6 +71,21 @@ object SiteCookies {
         Site.WEIBO -> cookies["SUB"]?.isNotBlank() == true || cookies["SUBP"]?.isNotBlank() == true
         Site.FACEBOOK -> cookies["access_token"]?.isNotBlank() == true ||
             cookies["xs"]?.isNotBlank() == true
+    }
+
+    /** Clears only [site]'s cookies; other sites' login state stays intact. */
+    fun clear(site: Site): Int {
+        val names = read(site).keys.toSet()
+        if (names.isEmpty()) {
+            flush()
+            return 0
+        }
+        val manager = CookieManager.getInstance()
+        for ((url, directive) in CookieExpiry.directives(names, urls(site), domains(site))) {
+            manager.setCookie(url, directive)
+        }
+        flush()
+        return names.size
     }
 
     fun flush() {
