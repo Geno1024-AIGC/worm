@@ -109,7 +109,7 @@ fun WormApp() {
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(16.dp),
                     )
-                    for (source in Source.entries) {
+                    for (source in Source.entries.sortedBy { it.label }) {
                         NavigationDrawerItem(
                             label = { Text(source.label) },
                             icon = { Icon(sourceIcon(source), contentDescription = null) },

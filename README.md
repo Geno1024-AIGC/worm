@@ -110,7 +110,8 @@ Qzone 相册接口的 `hostUin` 是相册主人（抓取目标），`uin` 必须
 
 Compose Material 3 单 Activity 应用，爬虫通过 `Crawler` 接口直接复用，没有第二条解析实现。
 
-1. 选择抓取源（`qzone` / `qzone/album` / 知乎用户 / 微博用户 / Facebook 用户），点对应「登录 …」在 WebView 里登录；
+1. 选择抓取源（`facebook` / `qzone` / `qzone/album` / `weibo` / `zhihu`，抽屉里按字母序排列），
+   点对应「登录 …」在 WebView 里登录；
    Cookie 由 `CookieManager` 采集，退出登录页即刷新界面上的登录态。知乎的 `z_c0` 常在扫码后的
    页面内异步写入、不会再触发导航回调，所以登录页除了 WebView 回调外还每秒轮询一次 Cookie，
    识别到登录态后自动返回。知乎直接进 `https://www.zhihu.com/signin`，并保留设备真实移动 UA、
