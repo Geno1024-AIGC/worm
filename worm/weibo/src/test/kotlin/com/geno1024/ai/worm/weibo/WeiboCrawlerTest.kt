@@ -93,6 +93,32 @@ class WeiboCrawlerTest {
     }
 
     @Test
+    fun `truncated list response is refetched once`(@TempDir temp: File) = runBlocking {
+        // Ends in `}` but never closes the outer objects — the exact shape Weibo sent.
+        val truncated = """{"ok":1,"data":{"cardlistInfo":{"contain}"""
+        val http = FakeHttp(listOf(truncated, firstPage, emptyPage))
+        val report = crawler(http, temp).collect(
+            CrawlRequest("12345"), CrawlSession(mapOf("SUB" to "token")),
+            DirectoryMediaSink(File(temp, "media")),
+        )
+        assertEquals(2, report.items.size) // one image + one video, no text in this request
+        assertEquals(2, report.saved.size)
+        assertTrue(report.warnings.isEmpty())
+        assertEquals(3, http.urls.size)
+    }
+
+    @Test
+    fun `persistent truncation reports a readable warning`(@TempDir temp: File) = runBlocking {
+        val truncated = """{"ok":1,"data":{"cardlistInfo":{"contain}"""
+        val report = crawler(FakeHttp(listOf(truncated)), temp).collect(
+            CrawlRequest("12345"), CrawlSession(mapOf("SUB" to "token")),
+            DirectoryMediaSink(File(temp, "media")),
+        )
+        assertTrue(report.items.isEmpty())
+        assertTrue(report.warnings.any { it.contains("响应被截断") })
+    }
+
+    @Test
     fun `auth failures become warnings instead of empty success`(@TempDir temp: File) = runBlocking {
         val http = object : HttpPortal by FakeHttp(listOf("")) {
             override fun get(

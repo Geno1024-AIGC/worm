@@ -30,8 +30,7 @@ fun responseProblem(body: String): String {
     val head = text.take(160)
     val snippet = head.take(120).replace('\n', ' ').replace('\r', ' ')
     val lower = head.lowercase()
-    val truncated = (text.startsWith("{") && !text.endsWith("}")) ||
-        (text.startsWith("[") && !text.endsWith("]"))
+    val truncated = isTruncatedJson(text)
     return when {
         head.isEmpty() -> "响应为空（可能触发登录或风控）"
         lower.startsWith("<svg") || lower.startsWith("<?xml") ->
@@ -41,6 +40,40 @@ fun responseProblem(body: String): String {
         truncated -> "响应被截断（$snippet），可能连接中断或接口提前关闭，请重试"
         else -> "响应不是合法 JSON（${snippet.take(40)}）"
     }
+}
+
+/**
+ * A body cut off mid-value can still end in `}` or `)` (a nested container closing),
+ * so counting containers outside strings is more reliable than checking edge bytes.
+ */
+private fun isTruncatedJson(text: String): Boolean {
+    if ((text.startsWith("{") && !text.endsWith("}")) ||
+        (text.startsWith("[") && !text.endsWith("]"))) return true
+    var braces = 0
+    var brackets = 0
+    var parens = 0
+    var inString = false
+    var escaped = false
+    for (ch in text) {
+        if (inString) {
+            when {
+                escaped -> escaped = false
+                ch == '\\' -> escaped = true
+                ch == '"' -> inString = false
+            }
+            continue
+        }
+        when (ch) {
+            '"' -> inString = true
+            '{' -> braces++
+            '}' -> braces--
+            '[' -> brackets++
+            ']' -> brackets--
+            '(' -> parens++
+            ')' -> parens--
+        }
+    }
+    return inString || braces > 0 || brackets > 0 || parens > 0
 }
 
 /** Tolerant accessors: these APIs rename fields across versions and embed numbers as strings. */

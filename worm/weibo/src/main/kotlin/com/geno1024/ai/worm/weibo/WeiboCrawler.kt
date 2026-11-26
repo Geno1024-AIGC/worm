@@ -55,9 +55,17 @@ class WeiboCrawler(
                 "微博列表", page, null,
                 "page=$page，已发现 ${items.size} 项${if (since != null) "，增量" else ""}",
             ))
-            val response = http.get(buildWeiboListUrl(uid, page), session, WEIBO_REFERER)
+            val url = buildWeiboListUrl(uid, page)
+            var response = http.get(url, session, WEIBO_REFERER)
             if (!usable(response, warnings)) break
-            val parsed = parseWeiboListPage(response.body, uid, WEIBO_REFERER, nowSec)
+            var parsed = parseWeiboListPage(response.body, uid, WEIBO_REFERER, nowSec)
+            // A chunked body may stop mid-value without an IOException or a wrong
+            // Content-Length. Re-fetch once before blaming the response format.
+            if (parsed.error?.contains("响应被截断") == true) {
+                response = http.get(url, session, WEIBO_REFERER)
+                if (!usable(response, warnings)) break
+                parsed = parseWeiboListPage(response.body, uid, WEIBO_REFERER, nowSec)
+            }
             if (parsed.error != null) {
                 warnings += "微博列表: ${parsed.error}"
                 break

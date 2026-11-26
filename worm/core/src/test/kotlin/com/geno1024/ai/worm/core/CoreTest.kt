@@ -53,6 +53,11 @@ class CoreTest {
         assertTrue(responseProblem("  ").contains("响应为空"))
         assertTrue(responseProblem("not-json").contains("响应不是合法 JSON"))
         assertTrue(responseProblem("""{"paging":{"is_end":false,"totals":8""").contains("响应被截断"))
+        // Cut off inside a nested object that still happens to end in `}`.
+        assertTrue(responseProblem("""{"ok":1,"data":{"cardlistInfo":{"contain}""").contains("响应被截断"))
+        assertTrue(responseProblem("""cb({"ok":1,"data":{"cards":[{"mblog":{"id":"w1}""")
+            .contains("响应被截断"))
+        assertFalse(responseProblem("""cb({"ok":1,"data":{"cards":[]}})""").contains("响应被截断"))
     }
 
     @Test
