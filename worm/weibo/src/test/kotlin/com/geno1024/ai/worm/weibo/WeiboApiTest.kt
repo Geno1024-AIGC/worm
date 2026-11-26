@@ -94,6 +94,22 @@ class WeiboApiTest {
     }
 
     @Test
+    fun `parentheses in post text do not break either endpoint`() {
+        // A post body with '(' and ')' inside strings used to be cut as JSONP.
+        val mobile = """{"ok":1,"data":{"cards":[{"mblog":{"id":"w1","created_at":"1700000000",
+            "text":"<p>see (here) http://t.cn/a(b)</p>"}}]}}""".trimIndent()
+        val page = parseWeiboListPage(mobile, "12345", WEIBO_REFERER, 1_700_000_000L)
+        assertNull(page.error)
+        assertEquals("w1", page.posts.single().id)
+
+        val web = """{"data":{"since_id":"5311266971192171kp2","list":[{"id":"w1",
+            "created_at":"1700000000","text":"see (here)"}]}}""".trimIndent()
+        val timeline = parseWeiboTimelinePage(web, weiboWebReferer("12345"), 1_700_000_000L)
+        assertNull(timeline.error)
+        assertEquals("w1", timeline.posts.single().id)
+    }
+
+    @Test
     fun `api errors and captcha pages are readable`() {
         val error = parseWeiboListPage("""{"ok":0,"msg":"user not found"}""", "123").error
             ?: error("expected an API error")

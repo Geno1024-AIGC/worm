@@ -5,11 +5,23 @@ import org.json.JSONObject
 
 /** JSONP wrappers used by both Qzone and Zhihu endpoints. */
 object Jsonp {
+    private val callbackName = Regex("""[A-Za-z_$][A-Za-z0-9_$.]*""")
+
     fun strip(body: String): String {
         val text = body.trim().removePrefix("\uFEFF")
         val open = text.indexOf('(')
+        if (open < 0) return text
+        // Plain JSON can contain '(' and ')' inside string values — Weibo texts and
+        // URLs do. Only unwrap a real JSONP call: a bare callback name before the
+        // first '(' and a ')' that closes the whole body. Otherwise the "wrapper"
+        // would cut a valid response into an unparseable fragment.
+        val callback = text.substring(0, open).trim()
+        if (callback.isNotEmpty() && !callback.matches(callbackName)) return text
         val close = text.lastIndexOf(')')
-        return if (open >= 0 && close > open) text.substring(open + 1, close).trim() else text
+        if (close <= open) return text
+        val tail = text.substring(close + 1).trim()
+        if (tail.isNotEmpty() && tail != ";") return text
+        return text.substring(open + 1, close).trim()
     }
 
     fun objectOf(body: String): JSONObject = JSONObject(strip(body))

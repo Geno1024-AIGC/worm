@@ -37,6 +37,20 @@ class CoreTest {
     }
 
     @Test
+    fun `plain JSON with parentheses in strings is not unwrapped as JSONP`() {
+        val body = """{"ok":1,"data":{"cardlistInfo":{"contain":"see (here)"},"cards":[]}}"""
+        assertEquals(body, Jsonp.strip(body))
+        assertEquals(
+            "see (here)",
+            Jsonp.objectOrNull(body)!!.getJSONObject("data").getJSONObject("cardlistInfo").getString("contain"),
+        )
+        // Real JSONP still works, including parentheses inside its payload.
+        assertEquals(0, Jsonp.objectOrNull("cb({\"code\":0});")!!.optInt("code"))
+        assertEquals(0, Jsonp.objectOrNull("({\"code\":0})")!!.optInt("code"))
+        assertEquals("a (b)", Jsonp.objectOrNull("cb({\"text\":\"a (b)\"})")!!.getString("text"))
+    }
+
+    @Test
     fun `jsonp objectOrNull never leaks a raw parser exception`() {
         assertNull(Jsonp.objectOrNull("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"))
         assertNull(Jsonp.objectOrNull(""))
