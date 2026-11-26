@@ -1,7 +1,11 @@
 package com.geno1024.ai.worm.android.ui
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -12,8 +16,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
@@ -279,11 +285,34 @@ fun WormApp() {
                     ui.result?.let { Text(it) }
                     ui.error?.let { Text("错误：$it", color = MaterialTheme.colorScheme.error) }
                     if (ui.warnings.isNotEmpty()) {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                            as ClipboardManager
+                        val warningText = ui.warnings.joinToString("\n") { "· $it" }
                         Card(modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text("警告", style = MaterialTheme.typography.titleSmall)
-                                for (warning in ui.warnings) {
-                                    Text("· $warning", style = MaterialTheme.typography.bodySmall)
+                            Column(
+                                Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text("警告", style = MaterialTheme.typography.titleSmall)
+                                    TextButton(onClick = {
+                                        clipboard.setPrimaryClip(
+                                            ClipData.newPlainText("worm-warnings", warningText),
+                                        )
+                                        Toast.makeText(context, "警告已复制", Toast.LENGTH_SHORT).show()
+                                    }) {
+                                        Icon(Icons.Default.ContentCopy, contentDescription = null)
+                                        Text("复制")
+                                    }
+                                }
+                                // Long-press to select as well; one shareable block keeps
+                                // multi-line copies consistent with the button above.
+                                SelectionContainer {
+                                    Text(warningText, style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                         }
