@@ -180,8 +180,10 @@ chunked 导致半截 JSON 溜过网络层，也会自动重取一次。仍失败
 媒体。`HtmlMedia` 只接受 http/https 且能被 `URI` 解析的链接，跳过 `data:` / `blob:` 等内联 scheme；
 畸形链接也不会再以 `Illegal character in opaque part at index 24` 中断整次抓取。
 
-启动图标是矢量自适应图标（含单色 themed 变体），抽屉、登录、目录、抓取与设置按钮用 Material
-Icons；两者都不依赖外部图片资源。
+启动图标是矢量自适应图标（含单色 themed 变体）；抽屉里的抓取源用内嵌的站点单色图标路径
+（Qzone / 微博 / Facebook / 知乎，来自 Simple Icons，CC0 1.0），统一 24×24 视窗并由 Material
+`Icon` 的 tint 随主题着色，与登录、目录、抓取、设置按钮的 Material Icons 风格一致。全部不依赖
+网络或外部图片资源。
 
 发现列表后队列写到 `filesDir/worm/resume-queue.json`，每完成一个媒体就更新一次。app 重启时若发现未完成
 队列，会先按队列记录的抓取源和保存目录续传（进度从已完成数继续），再允许开始新抓取；若登录态缺失或

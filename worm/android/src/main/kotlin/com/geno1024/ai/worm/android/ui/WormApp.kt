@@ -15,10 +15,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -48,7 +46,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -56,6 +53,7 @@ import com.geno1024.ai.worm.android.LoginActivity
 import com.geno1024.ai.worm.android.browser.BrowserScreen
 import com.geno1024.ai.worm.android.site.Source
 import com.geno1024.ai.worm.android.ui.settings.SettingsScreen
+import com.geno1024.ai.worm.android.ui.SourceIcons
 import com.geno1024.ai.worm.android.ui.theme.ThemePrefs
 import com.geno1024.ai.worm.android.ui.theme.ThemeSettings
 import com.geno1024.ai.worm.android.ui.theme.WormTheme
@@ -112,7 +110,7 @@ fun WormApp() {
                     for (source in Source.entries.sortedBy { it.label }) {
                         NavigationDrawerItem(
                             label = { Text(source.label) },
-                            icon = { Icon(sourceIcon(source), contentDescription = null) },
+                            icon = { Icon(SourceIcons.of(source), contentDescription = null) },
                             selected = ui.source == source,
                             onClick = {
                                 viewModel.selectSource(source)
@@ -295,12 +293,4 @@ fun WormApp() {
             }
         }
     }
-}
-
-private fun sourceIcon(source: Source): ImageVector = when (source) {
-    Source.QZONE -> Icons.Default.PhotoCamera
-    Source.QZONE_ALBUM -> Icons.Default.Folder
-    Source.ZHIHU -> Icons.Default.Language
-    Source.WEIBO -> Icons.Default.Person
-    Source.FACEBOOK -> Icons.Default.Language
 }
