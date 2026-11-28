@@ -21,4 +21,26 @@ class CookieExpiryTest {
         })
         assertTrue(directives.all { it.second.contains("Path=/") })
     }
+
+    @Test
+    fun `Qzone subdomain cookies get their own domain expiry`() {
+        val directives = CookieExpiry.directives(
+            names = setOf("skey", "p_skey"),
+            urls = listOf("https://user.qzone.qq.com/", "https://qzone.qq.com/", "https://qq.com/"),
+            domains = listOf("qq.com"),
+        )
+        // skey under .qzone.qq.com must be expired on qzone.qq.com, not just .qq.com.
+        assertTrue(directives.any {
+            it.first == "https://qzone.qq.com/" && it.second.startsWith("skey=;") &&
+                it.second.contains("Domain=.qzone.qq.com")
+        })
+        assertTrue(directives.any {
+            it.first == "https://user.qzone.qq.com/" && it.second.startsWith("p_skey=;") &&
+                it.second.contains("Domain=.user.qzone.qq.com")
+        })
+        assertTrue(directives.any {
+            it.first == "https://qq.com/" && it.second.startsWith("skey=;") &&
+                it.second.contains("Domain=.qq.com")
+        })
+    }
 }
